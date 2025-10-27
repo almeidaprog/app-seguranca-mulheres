@@ -1,6 +1,6 @@
-exports.home = (req, res) => {
+export const home = (req, res) => {
   res.send('Get route');
 };
-exports.homePost = (req, res) => {
+export const homePost = (req, res) => {
     res.send(`Post route`)
 }

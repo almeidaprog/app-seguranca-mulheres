@@ -1,10 +1,10 @@
-const express = require('express');
+import express from 'express';
+import {home, homePost} from '../controllers/homeController.js';
 const routes = express.Router();
-const homeController = require('../controllers/homeController.js');
 
 // Rotas da home
 
-routes.get('/', homeController.home);
-routes.post('/', homeController.homePost);
+routes.get('/', home);
+routes.post('/', homePost);
 
-module.exports = routes;
+export default routes;

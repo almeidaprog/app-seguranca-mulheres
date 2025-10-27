@@ -1,18 +1,20 @@
-require('dotenv').config();
+import 'dotenv/config';
+import express from 'express';
+import mongoose from 'mongoose';
 
-const express = require('express');
+import routes from './src/routes/routes.js';
+
+import { globalMiddleware } from './src/middlewares/middleware.js';
+
 const app = express();
-const mongoose = require('mongoose')
-//process.env.CONNECTIONSTRING
+
 mongoose.connect(process.env.CONNECTIONSTRING)
   .then(() => {
+    console.log('Connection whit database established')
     app.emit('Conecction established');
   })
-  .catch(e => console.log(e));
+  .catch(e => console.log('MongoDB connection error:', e));
 
-const path = require('path');
-const routes = require(path.resolve(__dirname,'src','routes','routes'));
-const { globalMiddleware } = require('./src/middlewares/middleware');
 
 app.use(express.urlencoded({ extended: true }));
 

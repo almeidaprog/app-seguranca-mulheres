@@ -1,5 +1,5 @@
-exports.globalMiddleware = (req, res, next) => {
-  if (req.body.cliente) {
+export const globalMiddleware = (req, res, next) => {
+  
 
     console.log();
 
@@ -7,6 +7,6 @@ exports.globalMiddleware = (req, res, next) => {
 
     console.log();
 
-  }
+  
   next();
 };
