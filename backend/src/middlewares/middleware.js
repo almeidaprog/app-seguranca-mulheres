@@ -1,12 +1,5 @@
 export const globalMiddleware = (req, res, next) => {
-  
-
-    console.log();
-
-    console.log('Passed middleware');
-
-    console.log();
-
-  
+  console.log();
+  console.log('Passed middleware');
   next();
 };

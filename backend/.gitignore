@@ -4,3 +4,7 @@ jspm_packages/
 
 # dotenv environment variable files
 .env
+
+#VsCode settings
+.vscode/
+settings.json
