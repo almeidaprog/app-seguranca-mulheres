@@ -3,7 +3,7 @@ import globals from 'globals';
 import importPlugin from 'eslint-plugin-import';
 
 export default defineConfig([
-  { files: ['**/*.{js,mjs,cjs}'], 
+  { files: ['**/*.{js,mjs,cjs}, "src/**/*.js"'], 
     plugins: { js,
       import: importPlugin
     }, 
