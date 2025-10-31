@@ -1,4 +1,5 @@
 //nome, email, genero, idade, localizacao, numero de telefone
+import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
 import isValidEmail from '../utils/emailValidator.js';
 
