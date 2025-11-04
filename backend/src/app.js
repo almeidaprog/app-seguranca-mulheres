@@ -1,14 +1,15 @@
 import express from 'express';
-import {globalMiddleware} from './middlewares/middleware.js'
-import routes from './routes/routes.js';
+import userRouter from './routes/userRoutes.js';
+import { errorHandler, notFound } from './middlewares/errorHandler.js';
 
 //Configurations
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-app.use(globalMiddleware);
+app.use('/api/users',userRouter);
 
-app.use(routes);
+app.use(notFound);
+app.use(errorHandler);
 
 export default app;
