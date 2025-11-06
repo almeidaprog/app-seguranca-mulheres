@@ -2,7 +2,6 @@ import express from 'express';
 import userRouter from './routes/userRoutes.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import session from 'express-session';
-import authRoutes from './routes/authRoutes.js';
 
 //Configurations
 const app = express();
@@ -25,7 +24,6 @@ app.use(session({
   
 //Routes
 app.use('/api/users',userRouter);
-app.use('/api/auth', authRoutes);
 
 //Errors
 app.use(notFound);

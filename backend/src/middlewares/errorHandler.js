@@ -11,7 +11,7 @@ export const errorHandler = (err, req, res, next) => {
   }
 
 
-  if (err.code === 11000) {
+  if (err.message === 'Email already registered') {
     return res.status(400).json({
       success: false,
       error: 'Email already registered'
@@ -25,19 +25,19 @@ export const errorHandler = (err, req, res, next) => {
       error: 'Invalid id'
     });
   }
-  if(err.name === 'Incorrect login data'){
+  if(err.message === 'Incorrect login data'){
     return res.status(401).json({
       success:false,
       error: 'Incorrect email or key'
     });
   }
-  if (err.name === 'Error logging out'){
+  if (err.message === 'Error logging out'){
     return res.status(500).json({
       success:false,
       error:'Error logging out'
     })
   }
-  if (err.name === 'Unauthorized access'){
+  if (err.message === 'Unauthorized access'){
     return res.status(401).json({
       success:false,
       error:'Unauthorized access'
