@@ -25,6 +25,24 @@ export const errorHandler = (err, req, res, next) => {
       error: 'Invalid id'
     });
   }
+  if(err.name === 'Incorrect login data'){
+    return res.status(401).json({
+      success:false,
+      error: 'Incorrect email or key'
+    });
+  }
+  if (err.name === 'Error logging out'){
+    return res.status(500).json({
+      success:false,
+      error:'Error logging out'
+    })
+  }
+  if (err.name === 'Unauthorized access'){
+    return res.status(401).json({
+      success:false,
+      error:'Unauthorized access'
+    })
+  }
 
   res.status(500).json({
     success: false,
