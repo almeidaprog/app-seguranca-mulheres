@@ -76,20 +76,11 @@ const userSchema = new mongoose.Schema({
 
 });
 
-userSchema.virtual('password')
-  .set(function(password) {
-    this._password = password;
-  })
-  .get(function() {
-    return this._password;
-  });
-
 userSchema.pre('save', async function (next) {
-  if(!this.isModified('_password') || this._password){
-    return next();
-  }
+  if (!this.isModified('password_hash')) {
+    return next();}
   try{
-    this.password_hash = await bcrypt.hash(this._password, 4);
+    this.password_hash = await bcrypt.hash(this.password_hash, 4);
     next();
   } catch (err) {
     next(err);
