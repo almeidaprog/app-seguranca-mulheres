@@ -1,5 +1,6 @@
 import express from 'express';
 import userRouter from './routes/userRoutes.js';
+import contactRoute from './routes/emergencyContactsRoutes.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import session from 'express-session';
 
@@ -24,6 +25,7 @@ app.use(session({
   
 //Routes
 app.use('/api/users',userRouter);
+app.use('/api/emergency-contacts',contactRoute);
 
 //Errors
 app.use(notFound);

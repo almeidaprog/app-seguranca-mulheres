@@ -58,22 +58,22 @@ export const updateUser = async (req, res, next) => {
 };
 
 export const deleteUser = async (req, res, next) => {
-try {
+  try {
     const userId = req.session.userId;
 
     req.session.destroy((err) => {
       if (err) {
-          const error = new Error('Error logging out');
-          throw error;
-        } })
+        const error = new Error('Error logging out');
+        throw error;
+      } });
         
-        res.clearCookie('app-seguranca.sid');
+    res.clearCookie('app-seguranca.sid');
 
     await User.findByIdAndDelete(userId);
 
-      res.json({ success: true, message: 'Account deleted sucefully' });
-    }
-   catch (error) {
+    res.json({ success: true, message: 'Account deleted sucefully' });
+  }
+  catch (error) {
     next(error);
   }
 };
