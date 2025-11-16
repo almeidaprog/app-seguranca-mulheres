@@ -3,6 +3,7 @@ import userRouter from './routes/userRoutes.js';
 import contactRoute from './routes/emergencyContactsRoutes.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import session from 'express-session';
+import MongoStore from 'connect-mongo';
 
 //Configurations
 const app = express();
@@ -14,6 +15,12 @@ app.use(session({
   secret: 'key-app-seguranca-para-mulheres',
   resave: false,
   saveUninitialized:false,
+  store: MongoStore.create({
+    mongoUrl: process.env.CONNECTIONSTRING,
+    collectionName:'sessions',
+    ttl:1000* 60* 60 * 24 * 7,
+    autoRemove: 'native'
+  }),
   cookie:{
     secure:false,
     httpOnly: true,
