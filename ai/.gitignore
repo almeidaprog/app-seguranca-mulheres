@@ -1,0 +1,34 @@
+# ---- VENV ----
+venv/
+ENV/
+env/
+.venv/
+
+# ---- ARQUIVOS TEMP / CACHE ----
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# ---- SUBIDAS DO WHISPER ----
+*.pt
+*.bin
+
+# ---- ÁUDIOS DE TESTE / ENTRADA ----
+*.wav
+*.mp3
+*.m4a
+*.mov
+*.flac
+*.ogg
+
+# Permitir o modelo .keras
+!*.keras
+
+# ---- CONFIGS AUTOMÁTICAS ----
+.DS_Store
+Thumbs.db
+
+# ---- PROJETOS PYTHON ----
+.ipynb_checkpoints/
