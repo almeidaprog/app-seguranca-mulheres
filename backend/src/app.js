@@ -1,14 +1,23 @@
 import express from 'express';
 import userRouter from './routes/userRoutes.js';
 import contactRoute from './routes/emergencyContactsRoutes.js';
+import aiRoute from './routes/aiRoutes.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
+import cors from 'cors';
 
 //Configurations
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+
+app.use(cors({
+  origin: 'http://localhost:3000',//FRONT URL
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true 
+}));
+
 
 //Sessions and cookies
 app.use(session({
@@ -33,6 +42,7 @@ app.use(session({
 //Routes
 app.use('/api/users',userRouter);
 app.use('/api/emergency-contacts',contactRoute);
+app.use('/api/ai',aiRoute);
 
 //Errors
 app.use(notFound);

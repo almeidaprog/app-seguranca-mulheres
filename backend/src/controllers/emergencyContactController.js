@@ -5,7 +5,7 @@ export const searchAppUsers = async (req, res, next) => {
   try {
     const { search } = req.query;
 
-     if (!search || typeof search !== 'string') {
+    if (!search || typeof search !== 'string') {
       return res.json({
         success: true,
         users: []
@@ -137,30 +137,30 @@ export const getMyContacts = async (req, res, next) => {
 };
 export const updateContact = async (req, res, next) => {
   try{
-  const { contactId } = req.query;
-console.log(contactId);
+    const { contactId } = req.query;
+    console.log(contactId);
 
-  const contact = await EmergencyContact.findById(contactId);
+    const contact = await EmergencyContact.findById(contactId);
   
-  if (!contact){
-    throw new Error('Contact not found');
-  }
-  if (contact.user.toString() !== req.session.userId) {
-    throw new Error('Not alowed');
+    if (!contact){
+      throw new Error('Contact not found');
+    }
+    if (contact.user.toString() !== req.session.userId) {
+      throw new Error('Not alowed');
     }
 
-  let updateData = {};
+    const updateData = {};
 
-  if(contact.contactType ==='app_user'){
-    const {notifications} = req.body;
-   if (notifications) {
-      updateData.notifications = {
-      ...contact.notifications.toObject(),
-      ...notifications};
-        } else {
+    if(contact.contactType ==='app_user'){
+      const {notifications} = req.body;
+      if (notifications) {
+        updateData.notifications = {
+          ...contact.notifications.toObject(),
+          ...notifications};
+      } else {
         throw new Error('Field notifications is required');
       } 
-  }else if (contact.contactType === 'external') {
+    }else if (contact.contactType === 'external') {
       const { notifications, name, email } = req.body;
       
       if (notifications) {
@@ -178,7 +178,7 @@ console.log(contactId);
       }
     }
   
-  const updatedContact = await EmergencyContact.findByIdAndUpdate(
+    const updatedContact = await EmergencyContact.findByIdAndUpdate(
       contactId,
       updateData,
       { new: true, runValidators: true }
