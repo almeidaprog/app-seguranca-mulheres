@@ -51,7 +51,7 @@ const userSchema = new mongoose.Schema({
   address:{
     city:{
       type: String,
-      required: [true, 'city is required'],
+      // required: [true, 'city is required'],
       trim: true
     },
     neighborhood: {
