@@ -1,73 +1,82 @@
 import os
-
-# --- SILENCIAR LOGS DO TENSORFLOW ---
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-
 import warnings
 warnings.filterwarnings("ignore")
 
-import librosa
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+
+import sounddevice as sd
+from scipy.io.wavfile import write
 import numpy as np
+import librosa
 from tensorflow.keras.models import load_model
 import whisper
+import json
+import time
 
-# --- CONFIGURAÇÕES ---
 MODEL_PATH = "risk_audio_model_v2.keras"
-AUDIO_BASENAME = "sample"  # nome sem extensão
-
-# --- CARREGA MODELO ---
-if not os.path.exists(MODEL_PATH):
-    raise FileNotFoundError(f"Modelo não encontrado em: {MODEL_PATH}")
+DURATION = 30
+SAMPLE_RATE = 44100
+TEMP_FILE = "temp_audio.wav"
 
 model = load_model(MODEL_PATH)
-
-# --- INICIALIZA WHISPER ---
 whisper_model = whisper.load_model("base")
 
-# --- FUNÇÃO PARA ACHAR ARQUIVO DE ÁUDIO ---
-def find_audio_file(base_name):
-    exts = [".wav", ".m4a", ".mp3", ".flac", ".ogg", ".mov"]
-    for ext in exts:
-        file = base_name + ext
-        if os.path.exists(file):
-            return file
-    raise FileNotFoundError(
-        f"Nenhuma versão do arquivo '{base_name}' encontrada "
-        f"com extensões: {', '.join(exts)}"
-    )
 
-# --- FUNÇÃO DE EXTRAÇÃO DE FEATURES ---
+def gravar_audio(path, duration=DURATION):
+    audio = sd.rec(
+        int(duration * SAMPLE_RATE),
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype='float32'
+    )
+    sd.wait()
+    write(path, SAMPLE_RATE, audio)
+    return path
+
+
 def extract_features(file_path, sr=22050):
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Áudio não encontrado: {file_path}")
     y, _ = librosa.load(file_path, sr=sr, mono=True)
-    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=27)  # igual ao treino
+    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=27)
     mfccs_mean = np.mean(mfccs.T, axis=0)
     return mfccs_mean.reshape(1, -1)
 
-# --- FUNÇÃO DE TRANSCRIÇÃO ---
-def transcribe(file_path):
-    result = whisper_model.transcribe(file_path)
-    return result['text']
+
+def transcribe_audio(path):
+    result = whisper_model.transcribe(path)
+    return result["text"]
 
 
-# --- EXECUÇÃO ---
-TEST_AUDIO_PATH = find_audio_file(AUDIO_BASENAME)
+def monitorar():
+    while True:
+        # grava
+        gravar_audio(TEMP_FILE)
 
-# extrai features
-full_feat = extract_features(TEST_AUDIO_PATH)
+        # features + modelo
+        feats = extract_features(TEMP_FILE)
+        prob = float(model.predict(feats)[0][0])
 
-# predição
-prob = model.predict(full_feat)[0][0]
+        # transcrição
+        texto = transcribe_audio(TEMP_FILE).strip()
 
-# transcrição
-text = transcribe(TEST_AUDIO_PATH)
+        # se risco
+        if prob > 0.5:
+            return {
+                "risco": True,
+                "prob": prob,
+                "texto": texto
+            }
 
-# saída
-print(f"🗣️ Transcrição: {text}")
+        # se não risco → continua
+        # mas devolve informação parcial também
+        # Node decide se quer continuar ou parar
+        return {
+            "risco": False,
+            "prob": prob,
+            "texto": texto
+        }
 
-if prob > 0.5:
-    print(f"⚠️ Risco detectado! Probabilidade: {prob*100:.2f}%")
-else:
-    print(f"🎯 Resultado: Normal ({prob*100:.2f}% de chance de risco)")
+
+if __name__ == "__main__":
+    resultado = monitorar()
+    print(json.dumps(resultado))
