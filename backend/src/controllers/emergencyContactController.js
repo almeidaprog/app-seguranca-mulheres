@@ -1,3 +1,4 @@
+import app from '../app.js';
 import EmergencyContact from '../models/emergencyContactModel.js';
 import User from '../models/userModel.js';
 
@@ -5,7 +6,7 @@ export const searchAppUsers = async (req, res, next) => {
   try {
     const { search } = req.query;
 
-     if (!search || typeof search !== 'string') {
+    if (!search || typeof search !== 'string') {
       return res.json({
         success: true,
         users: []
@@ -37,19 +38,19 @@ export const searchAppUsers = async (req, res, next) => {
 export const addContact = async (req, res, next) => {
   try{
 
-    const {contactType, appUserId, externalContact} = req.body;
+    const {contactType, appUser, externalContact} = req.body;
+    console.log(appUser);
+    console.log(contactType);
+    if (contactType === 'app_user' && appUser){
 
-
-    if (contactType === 'app_user' && appUserId){
-
-      const userExists = await User.findById(appUserId);
+      const userExists = await User.findById(appUser);
       if (!userExists) {
         throw new Error('User not found');
       }
 
       const contact = await EmergencyContact.findOne({
         user: req.session.userId,
-        appUser: appUserId
+        appUser: appUser
       });
 
       if (contact) {
@@ -60,7 +61,7 @@ export const addContact = async (req, res, next) => {
     const contact = new EmergencyContact({
       user: req.session.userId,
       contactType,
-      appUser: contactType === 'app_user'? appUserId : undefined,
+      appUser: contactType === 'app_user'? appUser : undefined,
       externalContact: contactType === 'external' ? externalContact : undefined
     });
 
@@ -82,7 +83,11 @@ export const getMyContacts = async (req, res, next) => {
     const contacts = await EmergencyContact.find({
       user: req.session.userId
     })
-      .populate('appUser', 'name email phoneNumber')
+      .populate({
+        path: 'appUser',
+        select: 'name email phoneNumber',
+        model: 'User'
+      })
       .sort({ createdAt: -1 });
 
     res.json({
@@ -137,30 +142,30 @@ export const getMyContacts = async (req, res, next) => {
 };
 export const updateContact = async (req, res, next) => {
   try{
-  const { contactId } = req.query;
-console.log(contactId);
+    const { contactId } = req.query;
+    console.log(contactId);
 
-  const contact = await EmergencyContact.findById(contactId);
+    const contact = await EmergencyContact.findById(contactId);
   
-  if (!contact){
-    throw new Error('Contact not found');
-  }
-  if (contact.user.toString() !== req.session.userId) {
-    throw new Error('Not alowed');
+    if (!contact){
+      throw new Error('Contact not found');
+    }
+    if (contact.user.toString() !== req.session.userId) {
+      throw new Error('Not alowed');
     }
 
-  let updateData = {};
+    const updateData = {};
 
-  if(contact.contactType ==='app_user'){
-    const {notifications} = req.body;
-   if (notifications) {
-      updateData.notifications = {
-      ...contact.notifications.toObject(),
-      ...notifications};
-        } else {
+    if(contact.contactType ==='app_user'){
+      const {notifications} = req.body;
+      if (notifications) {
+        updateData.notifications = {
+          ...contact.notifications.toObject(),
+          ...notifications};
+      } else {
         throw new Error('Field notifications is required');
       } 
-  }else if (contact.contactType === 'external') {
+    }else if (contact.contactType === 'external') {
       const { notifications, name, email } = req.body;
       
       if (notifications) {
@@ -178,7 +183,7 @@ console.log(contactId);
       }
     }
   
-  const updatedContact = await EmergencyContact.findByIdAndUpdate(
+    const updatedContact = await EmergencyContact.findByIdAndUpdate(
       contactId,
       updateData,
       { new: true, runValidators: true }
