@@ -2,6 +2,71 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import securityLogo from './images/security.png';
 
+/* eslint-disable no-unused-vars */
+
+// Serviço API
+const API_BASE_URL = 'http://localhost:5000/api/users';
+
+const apiService = {
+  async request(endpoint, options = {}) {
+    const url = `${API_BASE_URL}${endpoint}`;
+    
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      ...options,
+    };
+
+    if (options.body) {
+      config.body = JSON.stringify(options.body);
+    }
+
+    try {
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Erro na requisição');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na requisição:', error);
+      throw error;
+    }
+  },
+
+  async register(userData) {
+    return this.request('/register', { method: 'POST', body: userData });
+  },
+
+  async login(credentials) {
+    return this.request('/login', { method: 'POST', body: credentials });
+  },
+
+  async logout() {
+    return this.request('/logout', { method: 'POST' });
+  },
+
+  async getProfile() {
+    return this.request('/profile');
+  },
+
+  async updateProfile(userData) {
+    return this.request('/profile', { method: 'PUT', body: userData });
+  },
+
+  async deleteAccount() {
+    return this.request('/account', { method: 'DELETE' });
+  },
+
+  async checkAuth() {
+    return this.request('/check');
+  }
+};
+
 // ÍCONES CORRETOS DO FIGMA
 const HomeIcon = () => (
   <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -740,53 +805,218 @@ const SafeRoutes = () => {
   );
 };
 
+// COMPONENTE PARA PÁGINAS QUE REQUEREM AUTENTICAÇÃO
+const AuthRequired = ({ children, isAuthenticated, onShowAuth }) => {
+  if (!isAuthenticated) {
+    return (
+      <div className="auth-required">
+        <div className="auth-required-icon">🔐</div>
+        <h2>Área Restrita</h2>
+        <p className="auth-required-message">
+          Faça login para acessar esta funcionalidade.
+        </p>
+        <button 
+          className="primary-button"
+          onClick={onShowAuth}
+        >
+          Fazer Login
+        </button>
+      </div>
+    );
+  }
+  return children;
+};
+
 // COMPONENTE PRINCIPAL
 export default function App() {
   const [activePage, setActivePage] = useState('home');
   const [showLogoutModal, setShowLogoutModal] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState('login');
+  const [authMessage, setAuthMessage] = useState('');
 
-  const menuItems = [
-    { id: 'home', label: 'Página Inicial', icon: HomeIcon },
-    { id: 'location', label: 'Minha Localização', icon: LocationIcon },
-    { id: 'panic', label: 'Botão do Pânico', icon: PanicIcon },
-    { id: 'community', label: 'Comunidade de Ajuda', icon: CommunityIcon },
-    { id: 'reports', label: 'Denúncias', icon: ReportIcon },
-    { id: 'riskmap', label: 'Mapa de Risco', icon: MapIcon },
-    { id: 'notifications', label: 'Notificações', icon: NotificationIcon },
-    { id: 'settings', label: 'Configurações', icon: SettingsIcon },
-    { id: 'logout', label: 'Sair', icon: LogoutIcon },
-  ];
+  // Estados para formulários de autenticação
+  const [loginData, setLoginData] = useState({
+    email: '',
+    password_hash: ''
+  });
+  const [registerData, setRegisterData] = useState({
+    name: '',
+    email: '',
+    password_hash: '',
+    age: '',
+    gender: '',
+    phoneNumber: '',
+    city: '',
+    neighborhood: ''
+  });
 
-  // Carregar tema salvo ao iniciar
+  // Verificar autenticação ao carregar
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
+    checkAuthentication();
   }, []);
 
-  // Função para lidar com a saída
-  const handleLogout = (type) => {
-    console.log(`Ação de ${type} confirmada`);
-    setShowLogoutModal(null);
-    
-    if (type === 'session') {
-      setTimeout(() => {
-        alert('Você foi desconectada com sucesso!');
-        setActivePage('home');
-      }, 1000);
-    } else if (type === 'delete') {
-      setTimeout(() => {
-        alert('Sua conta foi excluída com sucesso!');
-        setActivePage('home');
-      }, 1000);
-    } else if (type === 'anonymous') {
-      setTimeout(() => {
-        alert('Modo anônimo ativado!');
-        setActivePage('home');
-      }, 1000);
+  const checkAuthentication = async () => {
+    try {
+      const response = await apiService.checkAuth();
+      if (response.isLoggedIn && response.user) {
+        setUser(response.user);
+        setIsAuthenticated(true);
+      }
+    } catch (error) {
+      console.error('Erro ao verificar autenticação:', error);
+    } finally {
+      setAuthLoading(false);
     }
   };
 
+  // Funções de autenticação
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthMessage('');
+    
+    try {
+      const response = await apiService.login(loginData);
+      setUser(response.user);
+      setIsAuthenticated(true);
+      setShowAuthModal(false);
+      setLoginData({ email: '', password_hash: '' });
+      setAuthMessage('success::Login realizado com sucesso!');
+    } catch (error) {
+      setAuthMessage(`error::${error.message || 'Erro ao fazer login'}`);
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    setAuthMessage('');
+    
+    try {
+      const userData = {
+        ...registerData,
+        age: parseInt(registerData.age),
+        address: registerData.city || registerData.neighborhood ? {
+          city: registerData.city,
+          neighborhood: registerData.neighborhood
+        } : undefined
+      };
+
+      // Remove campos undefined
+      Object.keys(userData).forEach(key => {
+        if (userData[key] === '' || userData[key] === undefined) {
+          delete userData[key];
+        }
+      });
+
+      const response = await apiService.register(userData);
+      setUser(response.user);
+      setIsAuthenticated(true);
+      setShowAuthModal(false);
+      setRegisterData({
+        name: '', email: '', password_hash: '', age: '', gender: '', 
+        phoneNumber: '', city: '', neighborhood: ''
+      });
+      setAuthMessage('success::Conta criada com sucesso!');
+    } catch (error) {
+      setAuthMessage(`error::${error.message || 'Erro ao criar conta'}`);
+    }
+  };
+
+  // Modificar a função handleLogout existente
+  const handleLogout = async (type) => {
+    setShowLogoutModal(null);
+    
+    if (type === 'session') {
+      try {
+        await apiService.logout();
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthMessage('success::Logout realizado com sucesso!');
+        setActivePage('home');
+      } catch (error) {
+        setAuthMessage('error::Erro ao fazer logout');
+      }
+    } else if (type === 'delete') {
+      try {
+        await apiService.deleteAccount();
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthMessage('success::Conta excluída com sucesso!');
+        setActivePage('home');
+      } catch (error) {
+        setAuthMessage('error::Erro ao excluir conta');
+      }
+    } else if (type === 'anonymous') {
+      setAuthMessage('info::Modo anônimo ativado!');
+      setActivePage('home');
+    }
+  };
+
+  // Atualizar perfil
+  const handleUpdateProfile = async (userData) => {
+    try {
+      const response = await apiService.updateProfile(userData);
+      setUser(response.user);
+      setAuthMessage('success::Perfil atualizado com sucesso!');
+    } catch (error) {
+      setAuthMessage(`error::${error.message || 'Erro ao atualizar perfil'}`);
+    }
+  };
+
+  const menuItems = [
+    { id: 'home', label: 'Página Inicial', icon: HomeIcon, requiresAuth: false },
+    { id: 'location', label: 'Minha Localização', icon: LocationIcon, requiresAuth: false },
+    { id: 'panic', label: 'Botão do Pânico', icon: PanicIcon, requiresAuth: false },
+    { id: 'community', label: 'Comunidade de Ajuda', icon: CommunityIcon, requiresAuth: true },
+    { id: 'reports', label: 'Denúncias', icon: ReportIcon, requiresAuth: true },
+    { id: 'riskmap', label: 'Mapa de Risco', icon: MapIcon, requiresAuth: false },
+    { id: 'notifications', label: 'Notificações', icon: NotificationIcon, requiresAuth: true },
+    { id: 'settings', label: 'Configurações', icon: SettingsIcon, requiresAuth: true },
+    { id: 'auth', label: isAuthenticated ? 'Sair' : 'Entrar', icon: LogoutIcon, requiresAuth: false },
+  ];
+
+  // Modificar a função de clique no menu
+  const handleMenuClick = (item) => {
+    if (item.id === 'auth') {
+      if (isAuthenticated) {
+        setShowLogoutModal('session');
+      } else {
+        setAuthMode('login');
+        setShowAuthModal(true);
+      }
+    } else {
+      if (item.requiresAuth && !isAuthenticated) {
+        setAuthMode('login');
+        setShowAuthModal(true);
+      } else {
+        setActivePage(item.id);
+      }
+    }
+  };
+
+  // Adicionar mensagem de autenticação no header se existir
+  useEffect(() => {
+    if (authMessage) {
+      const timer = setTimeout(() => {
+        setAuthMessage('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [authMessage]);
+
   const renderPage = () => {
+    if (authLoading) {
+      return (
+        <div className="auth-loading">
+          <div className="auth-loading-spinner"></div>
+          <span>Carregando...</span>
+        </div>
+      );
+    }
+
     switch (activePage) {
       case 'home':
         return (
@@ -1223,284 +1453,300 @@ export default function App() {
       
       case 'community':
         return (
-          <>
-            <h1 className="page-title">Comunidade de Ajuda</h1>
-            <p className="page-subtitle">Conecte-se com outras mulheres para apoio mútuo e segurança em um espaço seguro.</p>
-            
-            <div className="community-page-content">
-              <div className="community-stats">
-                <div className="stat-card">
-                  <div className="stat-icon">👥</div>
-                  <div className="stat-info">
-                    <h3>1.247</h3>
-                    <p>Mulheres na comunidade</p>
+          <AuthRequired 
+            isAuthenticated={isAuthenticated}
+            onShowAuth={() => {
+              setAuthMode('login');
+              setShowAuthModal(true);
+            }}
+          >
+            <>
+              <h1 className="page-title">Comunidade de Ajuda</h1>
+              <p className="page-subtitle">Conecte-se com outras mulheres para apoio mútuo e segurança em um espaço seguro.</p>
+              
+              <div className="community-page-content">
+                <div className="community-stats">
+                  <div className="stat-card">
+                    <div className="stat-icon">👥</div>
+                    <div className="stat-info">
+                      <h3>1.247</h3>
+                      <p>Mulheres na comunidade</p>
+                    </div>
                   </div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-icon">💬</div>
-                  <div className="stat-info">
-                    <h3>568</h3>
-                    <p>Mensagens hoje</p>
+                  <div className="stat-card">
+                    <div className="stat-icon">💬</div>
+                    <div className="stat-info">
+                      <h3>568</h3>
+                      <p>Mensagens hoje</p>
+                    </div>
                   </div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-icon">🤝</div>
-                  <div className="stat-info">
-                    <h3>89%</h3>
-                    <p>Sentem-se mais seguras</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="community-main">
-                <div className="community-features">
-                  <SafeForum />
-                  
-                  <div className="community-resources">
-                    <h3>Recursos de Apoio</h3>
-                    <div className="resource-grid">
-                      <div className="resource-card">
-                        <div className="resource-icon">🩺</div>
-                        <h4>Apoio Psicológico</h4>
-                        <p>Profissionais especializados disponíveis 24/7</p>
-                        <button className="secondary-button">Acessar</button>
-                      </div>
-                      <div className="resource-card">
-                        <div className="resource-icon">⚖️</div>
-                        <h4>Orientação Jurídica</h4>
-                        <p>Advogadas voluntárias para orientação legal</p>
-                        <button className="secondary-button">Consultar</button>
-                      </div>
-                      <div className="resource-card">
-                        <div className="resource-icon">🏠</div>
-                        <h4>Abrigos Parceiros</h4>
-                        <p>Rede de abrigos seguros em situações de risco</p>
-                        <button className="secondary-button">Localizar</button>
-                      </div>
+                  <div className="stat-card">
+                    <div className="stat-icon">🤝</div>
+                    <div className="stat-info">
+                      <h3>89%</h3>
+                      <p>Sentem-se mais seguras</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="community-sidebar">
-                  <div className="sidebar-card">
-                    <h4>📋 Regras da Comunidade</h4>
-                    <ul>
-                      <li>Respeito acima de tudo</li>
-                      <li>Sigilo e anonimato</li>
-                      <li>Sem julgamentos</li>
-                      <li>Apoio mútuo</li>
-                      <li>Denuncie comportamentos inadequados</li>
-                    </ul>
-                  </div>
-
-                  <div className="sidebar-card">
-                    <h4>🏆 Top Apoiadoras</h4>
-                    <div className="top-supporters">
-                      <div className="supporter">
-                        <span>Anônima A</span>
-                        <span>🌟 124</span>
-                      </div>
-                      <div className="supporter">
-                        <span>Anônima B</span>
-                        <span>🌟 98</span>
-                      </div>
-                      <div className="supporter">
-                        <span>Anônima C</span>
-                        <span>🌟 76</span>
+                <div className="community-main">
+                  <div className="community-features">
+                    <SafeForum />
+                    
+                    <div className="community-resources">
+                      <h3>Recursos de Apoio</h3>
+                      <div className="resource-grid">
+                        <div className="resource-card">
+                          <div className="resource-icon">🩺</div>
+                          <h4>Apoio Psicológico</h4>
+                          <p>Profissionais especializados disponíveis 24/7</p>
+                          <button className="secondary-button">Acessar</button>
+                        </div>
+                        <div className="resource-card">
+                          <div className="resource-icon">⚖️</div>
+                          <h4>Orientação Jurídica</h4>
+                          <p>Advogadas voluntárias para orientação legal</p>
+                          <button className="secondary-button">Consultar</button>
+                        </div>
+                        <div className="resource-card">
+                          <div className="resource-icon">🏠</div>
+                          <h4>Abrigos Parceiros</h4>
+                          <p>Rede de abrigos seguros em situações de risco</p>
+                          <button className="secondary-button">Localizar</button>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="sidebar-card">
-                    <h4>🚨 Ajuda Imediata</h4>
-                    <p>Precisa de ajuda urgente?</p>
-                    <button className="emergency-button-small">
-                      Buscar Apoio Imediato
-                    </button>
+                  <div className="community-sidebar">
+                    <div className="sidebar-card">
+                      <h4>📋 Regras da Comunidade</h4>
+                      <ul>
+                        <li>Respeito acima de tudo</li>
+                        <li>Sigilo e anonimato</li>
+                        <li>Sem julgamentos</li>
+                        <li>Apoio mútuo</li>
+                        <li>Denuncie comportamentos inadequados</li>
+                      </ul>
+                    </div>
+
+                    <div className="sidebar-card">
+                      <h4>🏆 Top Apoiadoras</h4>
+                      <div className="top-supporters">
+                        <div className="supporter">
+                          <span>Anônima A</span>
+                          <span>🌟 124</span>
+                        </div>
+                        <div className="supporter">
+                          <span>Anônima B</span>
+                          <span>🌟 98</span>
+                        </div>
+                        <div className="supporter">
+                          <span>Anônima C</span>
+                          <span>🌟 76</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="sidebar-card">
+                      <h4>🚨 Ajuda Imediata</h4>
+                      <p>Precisa de ajuda urgente?</p>
+                      <button className="emergency-button-small">
+                        Buscar Apoio Imediato
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </>
+            </>
+          </AuthRequired>
         );
       
       case 'reports':
         return (
-          <>
-            <h1 className="page-title">Denúncias</h1>
-            <p className="page-subtitle">Faça denúncias de forma anônima e segura. Sua identidade está protegida.</p>
-            
-            <div className="reports-page-content">
-              <div className="reports-stats">
-                <div className="stat-card">
-                  <div className="stat-icon">🛡️</div>
-                  <div className="stat-info">
-                    <h3>2.847</h3>
-                    <p>Denúncias realizadas</p>
+          <AuthRequired 
+            isAuthenticated={isAuthenticated}
+            onShowAuth={() => {
+              setAuthMode('login');
+              setShowAuthModal(true);
+            }}
+          >
+            <>
+              <h1 className="page-title">Denúncias</h1>
+              <p className="page-subtitle">Faça denúncias de forma anônima e segura. Sua identidade está protegida.</p>
+              
+              <div className="reports-page-content">
+                <div className="reports-stats">
+                  <div className="stat-card">
+                    <div className="stat-icon">🛡️</div>
+                    <div className="stat-info">
+                      <h3>2.847</h3>
+                      <p>Denúncias realizadas</p>
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-icon">✅</div>
+                    <div className="stat-info">
+                      <h3>1.923</h3>
+                      <p>Encaminhadas às autoridades</p>
+                    </div>
+                  </div>
+                  <div className="stat-card">
+                    <div className="stat-icon">⚖️</div>
+                    <div className="stat-info">
+                      <h3>76%</h3>
+                      <p>Em processamento</p>
+                    </div>
                   </div>
                 </div>
-                <div className="stat-card">
-                  <div className="stat-icon">✅</div>
-                  <div className="stat-info">
-                    <h3>1.923</h3>
-                    <p>Encaminhadas às autoridades</p>
+
+                <div className="reports-main">
+                  <div className="reports-features">
+                    <div className="feature-section">
+                      <h2>Fazer Nova Denúncia</h2>
+                      <p>Nosso sistema garante total anonimato e segurança das suas informações.</p>
+                      <AnonymousReport />
+                    </div>
+
+                    <div className="reports-types">
+                      <h3>Tipos de Denúncia</h3>
+                      <div className="types-grid">
+                        <div className="type-card">
+                          <div className="type-icon">🚫</div>
+                          <h4>Assédio Sexual</h4>
+                          <p>Comportamentos indesejados de natureza sexual</p>
+                        </div>
+                        <div className="type-card">
+                          <div className="type-icon">👊</div>
+                          <h4>Violência Física</h4>
+                          <p>Agressões, ameaças ou qualquer tipo de violência</p>
+                        </div>
+                        <div className="type-card">
+                          <div className="type-icon">💬</div>
+                          <h4>Assédio Moral</h4>
+                          <p>Humilhação, constrangimento ou perseguição</p>
+                        </div>
+                        <div className="type-card">
+                          <div className="type-icon">🚷</div>
+                          <h4>Discriminação</h4>
+                          <p>Preconceito por gênero, raça, orientação sexual</p>
+                        </div>
+                        <div className="type-card">
+                          <div className="type-icon">📱</div>
+                          <h4>Assédio Virtual</h4>
+                          <p>Perseguição ou ameaças em ambiente digital</p>
+                        </div>
+                        <div className="type-card">
+                          <div className="type-icon">🔍</div>
+                          <h4>Outras Situações</h4>
+                          <p>Qualquer outra forma de violência ou assédio</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="reports-process">
+                      <h3>Como Funciona o Processo</h3>
+                      <div className="process-steps">
+                        <div className="process-step">
+                          <div className="step-number">1</div>
+                          <div className="step-content">
+                            <h4>Denúncia Anônima</h4>
+                            <p>Você faz a denúncia sem identificar-se. Seus dados pessoais são protegidos.</p>
+                          </div>
+                        </div>
+                        <div className="process-step">
+                          <div className="step-number">2</div>
+                          <div className="step-content">
+                            <h4>Análise da Equipe</h4>
+                            <p>Nossa equipe especializada analisa e categoriza a denúncia.</p>
+                          </div>
+                        </div>
+                        <div className="process-step">
+                          <div className="step-number">3</div>
+                          <div className="step-content">
+                            <h4>Encaminhamento</h4>
+                            <p>A denúncia é encaminhada para as autoridades competentes.</p>
+                          </div>
+                        </div>
+                        <div className="process-step">
+                          <div className="step-number">4</div>
+                          <div className="step-content">
+                            <h4>Acompanhamento</h4>
+                            <p>Monitoramos o andamento junto aos órgãos responsáveis.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-icon">⚖️</div>
-                  <div className="stat-info">
-                    <h3>76%</h3>
-                    <p>Em processamento</p>
+
+                  <div className="reports-sidebar">
+                    <div className="sidebar-card">
+                      <h4>📞 Canais de Apoio</h4>
+                      <div className="support-channels">
+                        <div className="channel">
+                          <strong>Disque 180</strong>
+                          <span>Central de Atendimento à Mulher</span>
+                        </div>
+                        <div className="channel">
+                          <strong>Disque 100</strong>
+                          <span>Direitos Humanos</span>
+                        </div>
+                        <div className="channel">
+                          <strong>190</strong>
+                          <span>Polícia Militar</span>
+                        </div>
+                        <div className="channel">
+                          <strong>Disque 181</strong>
+                          <span>Denúncia Anônima Estadual</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="sidebar-card">
+                      <h4>🛡️ Seus Direitos</h4>
+                      <ul>
+                        <li>Lei Maria da Penha (Lei 11.340/2006)</li>
+                        <li>Lei do Feminicídio (Lei 13.104/2015)</li>
+                        <li>Lei do Assédio Sexual (Lei 10.224/2001)</li>
+                        <li>Direito ao anonimato</li>
+                        <li>Proteção contra retaliação</li>
+                      </ul>
+                    </div>
+
+                    <div className="sidebar-card">
+                      <h4>📊 Denúncias Recentes</h4>
+                      <div className="recent-reports">
+                        <div className="report-item">
+                          <span className="report-type">Assédio</span>
+                          <span className="report-time">15 min atrás</span>
+                        </div>
+                        <div className="report-item">
+                          <span className="report-type">Violência</span>
+                          <span className="report-time">1 hora atrás</span>
+                        </div>
+                        <div className="report-item">
+                          <span className="report-type">Discriminação</span>
+                          <span className="report-time">2 horas atrás</span>
+                        </div>
+                      </div>
+                      <p className="reports-note">+47 denúncias hoje</p>
+                    </div>
+
+                    <div className="sidebar-card emergency-card">
+                      <h4>🚨 Emergência?</h4>
+                      <p>Se você está em perigo imediato:</p>
+                      <button className="emergency-button-small">
+                        Ligue para 190
+                      </button>
+                      <button className="secondary-button">
+                        Acionar Botão do Pânico
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              <div className="reports-main">
-                <div className="reports-features">
-                  <div className="feature-section">
-                    <h2>Fazer Nova Denúncia</h2>
-                    <p>Nosso sistema garante total anonimato e segurança das suas informações.</p>
-                    <AnonymousReport />
-                  </div>
-
-                  <div className="reports-types">
-                    <h3>Tipos de Denúncia</h3>
-                    <div className="types-grid">
-                      <div className="type-card">
-                        <div className="type-icon">🚫</div>
-                        <h4>Assédio Sexual</h4>
-                        <p>Comportamentos indesejados de natureza sexual</p>
-                      </div>
-                      <div className="type-card">
-                        <div className="type-icon">👊</div>
-                        <h4>Violência Física</h4>
-                        <p>Agressões, ameaças ou qualquer tipo de violência</p>
-                      </div>
-                      <div className="type-card">
-                        <div className="type-icon">💬</div>
-                        <h4>Assédio Moral</h4>
-                        <p>Humilhação, constrangimento ou perseguição</p>
-                      </div>
-                      <div className="type-card">
-                        <div className="type-icon">🚷</div>
-                        <h4>Discriminação</h4>
-                        <p>Preconceito por gênero, raça, orientação sexual</p>
-                      </div>
-                      <div className="type-card">
-                        <div className="type-icon">📱</div>
-                        <h4>Assédio Virtual</h4>
-                        <p>Perseguição ou ameaças em ambiente digital</p>
-                      </div>
-                      <div className="type-card">
-                        <div className="type-icon">🔍</div>
-                        <h4>Outras Situações</h4>
-                        <p>Qualquer outra forma de violência ou assédio</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="reports-process">
-                    <h3>Como Funciona o Processo</h3>
-                    <div className="process-steps">
-                      <div className="process-step">
-                        <div className="step-number">1</div>
-                        <div className="step-content">
-                          <h4>Denúncia Anônima</h4>
-                          <p>Você faz a denúncia sem identificar-se. Seus dados pessoais são protegidos.</p>
-                        </div>
-                      </div>
-                      <div className="process-step">
-                        <div className="step-number">2</div>
-                        <div className="step-content">
-                          <h4>Análise da Equipe</h4>
-                          <p>Nossa equipe especializada analisa e categoriza a denúncia.</p>
-                        </div>
-                      </div>
-                      <div className="process-step">
-                        <div className="step-number">3</div>
-                        <div className="step-content">
-                          <h4>Encaminhamento</h4>
-                          <p>A denúncia é encaminhada para as autoridades competentes.</p>
-                        </div>
-                      </div>
-                      <div className="process-step">
-                        <div className="step-number">4</div>
-                        <div className="step-content">
-                          <h4>Acompanhamento</h4>
-                          <p>Monitoramos o andamento junto aos órgãos responsáveis.</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="reports-sidebar">
-                  <div className="sidebar-card">
-                    <h4>📞 Canais de Apoio</h4>
-                    <div className="support-channels">
-                      <div className="channel">
-                        <strong>Disque 180</strong>
-                        <span>Central de Atendimento à Mulher</span>
-                      </div>
-                      <div className="channel">
-                        <strong>Disque 100</strong>
-                        <span>Direitos Humanos</span>
-                      </div>
-                      <div className="channel">
-                        <strong>190</strong>
-                        <span>Polícia Militar</span>
-                      </div>
-                      <div className="channel">
-                        <strong>Disque 181</strong>
-                        <span>Denúncia Anônima Estadual</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="sidebar-card">
-                    <h4>🛡️ Seus Direitos</h4>
-                    <ul>
-                      <li>Lei Maria da Penha (Lei 11.340/2006)</li>
-                      <li>Lei do Feminicídio (Lei 13.104/2015)</li>
-                      <li>Lei do Assédio Sexual (Lei 10.224/2001)</li>
-                      <li>Direito ao anonimato</li>
-                      <li>Proteção contra retaliação</li>
-                    </ul>
-                  </div>
-
-                  <div className="sidebar-card">
-                    <h4>📊 Denúncias Recentes</h4>
-                    <div className="recent-reports">
-                      <div className="report-item">
-                        <span className="report-type">Assédio</span>
-                        <span className="report-time">15 min atrás</span>
-                      </div>
-                      <div className="report-item">
-                        <span className="report-type">Violência</span>
-                        <span className="report-time">1 hora atrás</span>
-                      </div>
-                      <div className="report-item">
-                        <span className="report-type">Discriminação</span>
-                        <span className="report-time">2 horas atrás</span>
-                      </div>
-                    </div>
-                    <p className="reports-note">+47 denúncias hoje</p>
-                  </div>
-
-                  <div className="sidebar-card emergency-card">
-                    <h4>🚨 Emergência?</h4>
-                    <p>Se você está em perigo imediato:</p>
-                    <button className="emergency-button-small">
-                      Ligue para 190
-                    </button>
-                    <button className="secondary-button">
-                      Acionar Botão do Pânico
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+            </>
+          </AuthRequired>
         );
       
       case 'riskmap':
@@ -1805,603 +2051,625 @@ export default function App() {
       
       case 'notifications':
         return (
-          <>
-            <h1 className="page-title">Notificações</h1>
-            <p className="page-subtitle">Mantenha-se informada sobre alertas de segurança e atualizações importantes.</p>
-            
-            <div className="notifications-page-content">
-              <div className="notifications-header">
-                <div className="notifications-stats">
-                  <div className="stat-badge">
-                    <span className="stat-number">12</span>
-                    <span className="stat-label">Novas</span>
+          <AuthRequired 
+            isAuthenticated={isAuthenticated}
+            onShowAuth={() => {
+              setAuthMode('login');
+              setShowAuthModal(true);
+            }}
+          >
+            <>
+              <h1 className="page-title">Notificações</h1>
+              <p className="page-subtitle">Mantenha-se informada sobre alertas de segurança e atualizações importantes.</p>
+              
+              <div className="notifications-page-content">
+                <div className="notifications-header">
+                  <div className="notifications-stats">
+                    <div className="stat-badge">
+                      <span className="stat-number">12</span>
+                      <span className="stat-label">Novas</span>
+                    </div>
+                    <div className="stat-badge">
+                      <span className="stat-number">47</span>
+                      <span className="stat-label">Total</span>
+                    </div>
                   </div>
-                  <div className="stat-badge">
-                    <span className="stat-number">47</span>
-                    <span className="stat-label">Total</span>
+                  
+                  <div className="notifications-actions">
+                    <button className="secondary-button">
+                      📥 Marcar todas como lidas
+                    </button>
+                    <button className="text-button">
+                      ⚙️ Configurações
+                    </button>
                   </div>
                 </div>
-                
-                <div className="notifications-actions">
-                  <button className="secondary-button">
-                    📥 Marcar todas como lidas
-                  </button>
-                  <button className="text-button">
-                    ⚙️ Configurações
-                  </button>
+
+                <div className="notifications-filters">
+                  <div className="filter-tabs">
+                    <button className="filter-tab active">Todas</button>
+                    <button className="filter-tab">Alertas</button>
+                    <button className="filter-tab">Segurança</button>
+                    <button className="filter-tab">Comunidade</button>
+                    <button className="filter-tab">Sistema</button>
+                  </div>
+                  
+                  <div className="filter-options">
+                    <select className="filter-select">
+                      <option>Ordenar por: Mais recentes</option>
+                      <option>Ordenar por: Mais antigas</option>
+                      <option>Ordenar por: Prioridade</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="notifications-list">
+                  <div className="notification-item critical">
+                    <div className="notification-icon">🚨</div>
+                    <div className="notification-content">
+                      <div className="notification-header">
+                        <h4>Alerta de Segurança - Área de Risco</h4>
+                        <span className="notification-time">Agora há pouco</span>
+                      </div>
+                      <p className="notification-message">
+                        Alto índice de ocorrências reportadas na região do Centro. Evite a Rua das Flores após às 18h.
+                      </p>
+                      <div className="notification-actions">
+                        <button className="action-button primary">Ver no Mapa</button>
+                        <button className="action-button">Ignorar</button>
+                      </div>
+                    </div>
+                    <div className="notification-badge new"></div>
+                  </div>
+
+                  <div className="notification-item important">
+                    <div className="notification-icon">🛡️</div>
+                    <div className="notification-content">
+                      <div className="notification-header">
+                        <h4>Denúncia Encaminhada</h4>
+                        <span className="notification-time">15 min atrás</span>
+                      </div>
+                      <p className="notification-message">
+                        Sua denúncia #2847 foi encaminhada para a Delegacia da Mulher e está em processamento.
+                      </p>
+                      <div className="notification-meta">
+                        <span className="meta-item">📋 Protocolo: #2847</span>
+                        <span className="meta-item">⚖️ Status: Em análise</span>
+                      </div>
+                    </div>
+                    <div className="notification-badge new"></div>
+                  </div>
+
+                  <div className="notification-item community">
+                    <div className="notification-icon">👥</div>
+                    <div className="notification-content">
+                      <div className="notification-header">
+                        <h4>Nova Mensagem na Comunidade</h4>
+                        <span className="notification-time">1 hora atrás</span>
+                      </div>
+                      <p className="notification-message">
+                        <strong>Anônima23</strong> compartilhou uma experiência e está buscando apoio.
+                      </p>
+                      <div className="notification-actions">
+                        <button className="action-button primary">Ver Conversa</button>
+                        <button className="action-button">Responder</button>
+                      </div>
+                    </div>
+                    <div className="notification-badge new"></div>
+                  </div>
+
+                  <div className="notification-item info">
+                    <div className="notification-icon">🏥</div>
+                    <div className="notification-content">
+                      <div className="notification-header">
+                        <h4>Ponto de Apoio Próximo</h4>
+                        <span className="notification-time">2 horas atrás</span>
+                      </div>
+                      <p className="notification-message">
+                        Você está próxima ao Hospital Municipal - plantão 24h disponível.
+                      </p>
+                      <div className="notification-meta">
+                        <span className="meta-item">📍 1.2km de distância</span>
+                        <span className="meta-item">📞 (11) 3333-4444</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="notification-item system">
+                    <div className="notification-icon">🔄</div>
+                    <div className="notification-content">
+                      <div className="notification-header">
+                        <h4>Mapa de Risco Atualizado</h4>
+                        <span className="notification-time">5 horas atrás</span>
+                      </div>
+                      <p className="notification-message">
+                        Novas áreas de risco foram identificadas na sua região. Verifique as rotas seguras atualizadas.
+                      </p>
+                      <div className="notification-actions">
+                        <button className="action-button primary">Ver Mapa</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="notification-item tip">
+                    <div className="notification-icon">💡</div>
+                    <div className="notification-content">
+                      <div className="notification-header">
+                        <h4>Dica de Segurança</h4>
+                        <span className="notification-time">Ontem</span>
+                      </div>
+                      <p className="notification-message">
+                        Ao usar transporte por aplicativo, verifique sempre a placa e modelo do veículo antes de entrar.
+                      </p>
+                      <div className="notification-meta">
+                        <span className="meta-item">📱 Compartilhe com amigas</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="notification-item event">
+                    <div className="notification-icon">📅</div>
+                    <div className="notification-content">
+                      <div className="notification-header">
+                        <h4>Workshop de Autodefesa</h4>
+                        <span className="notification-time">2 dias atrás</span>
+                      </div>
+                      <p className="notification-message">
+                        Participe do workshop gratuito de autodefesa para mulheres neste sábado, às 14h no Centro Comunitário.
+                      </p>
+                      <div className="notification-meta">
+                        <span className="meta-item">📍 Centro Comunitário - Jardins</span>
+                        <span className="meta-item">⏰ Sábado - 14h</span>
+                      </div>
+                      <div className="notification-actions">
+                        <button className="action-button primary">Confirmar Presença</button>
+                        <button className="action-button">Compartilhar</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="notification-item system">
+                    <div className="notification-icon">📊</div>
+                    <div className="notification-content">
+                      <div className="notification-header">
+                        <h4>Relatório Semanal de Segurança</h4>
+                        <span className="notification-time">3 dias atrás</span>
+                      </div>
+                      <p className="notification-message">
+                        Sua região teve uma redução de 15% em ocorrências esta semana. Continue seguindo as rotas seguras!
+                      </p>
+                      <div className="notification-meta">
+                        <span className="meta-item">📈 Tendência: Melhorando</span>
+                        <span className="meta-item">🛡️ 89% de segurança</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="notifications-sidebar">
+                  <div className="sidebar-card">
+                    <h4>📋 Tipos de Notificação</h4>
+                    <div className="notification-types">
+                      <div className="type-item">
+                        <span className="type-dot critical"></span>
+                        <span>Alertas Críticos</span>
+                        <span className="type-count">3</span>
+                      </div>
+                      <div className="type-item">
+                        <span className="type-dot important"></span>
+                        <span>Importantes</span>
+                        <span className="type-count">5</span>
+                      </div>
+                      <div className="type-item">
+                        <span className="type-dot community"></span>
+                        <span>Comunidade</span>
+                        <span className="type-count">8</span>
+                      </div>
+                      <div className="type-item">
+                        <span className="type-dot info"></span>
+                        <span>Informações</span>
+                        <span className="type-count">12</span>
+                      </div>
+                      <div className="type-item">
+                        <span className="type-dot system"></span>
+                        <span>Sistema</span>
+                        <span className="type-count">19</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sidebar-card">
+                    <h4>🔔 Preferências</h4>
+                    <div className="preference-options">
+                      <label className="preference-checkbox">
+                        <input type="checkbox" defaultChecked />
+                        <span>Alertas de emergência</span>
+                      </label>
+                      <label className="preference-checkbox">
+                        <input type="checkbox" defaultChecked />
+                        <span>Notificações de segurança</span>
+                      </label>
+                      <label className="preference-checkbox">
+                        <input type="checkbox" defaultChecked />
+                        <span>Atualizações da comunidade</span>
+                      </label>
+                      <label className="preference-checkbox">
+                        <input type="checkbox" />
+                        <span>Notificações de marketing</span>
+                      </label>
+                      <label className="preference-checkbox">
+                        <input type="checkbox" defaultChecked />
+                        <span>Dicas de segurança</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="sidebar-card">
+                    <h4>📱 Receber Notificações</h4>
+                    <div className="notification-methods">
+                      <button className="method-button active">
+                        <span>📲 Push</span>
+                        <span className="method-status">Ativo</span>
+                      </button>
+                      <button className="method-button">
+                        <span>📧 Email</span>
+                        <span className="method-status">Inativo</span>
+                      </button>
+                      <button className="method-button">
+                        <span>💬 SMS</span>
+                        <span className="method-status">Inativo</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="sidebar-card emergency-card">
+                    <h4>🚨 Alertas Rápidos</h4>
+                    <p>Configure alertas para situações específicas:</p>
+                    <div className="quick-alerts">
+                      <button className="alert-button">
+                        ⚠️ Áreas de risco próximas
+                      </button>
+                      <button className="alert-button">
+                        📍 Mudança de localização
+                      </button>
+                      <button className="alert-button">
+                        👥 Atividade da comunidade
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              <div className="notifications-filters">
-                <div className="filter-tabs">
-                  <button className="filter-tab active">Todas</button>
-                  <button className="filter-tab">Alertas</button>
-                  <button className="filter-tab">Segurança</button>
-                  <button className="filter-tab">Comunidade</button>
-                  <button className="filter-tab">Sistema</button>
-                </div>
-                
-                <div className="filter-options">
-                  <select className="filter-select">
-                    <option>Ordenar por: Mais recentes</option>
-                    <option>Ordenar por: Mais antigas</option>
-                    <option>Ordenar por: Prioridade</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="notifications-list">
-                <div className="notification-item critical">
-                  <div className="notification-icon">🚨</div>
-                  <div className="notification-content">
-                    <div className="notification-header">
-                      <h4>Alerta de Segurança - Área de Risco</h4>
-                      <span className="notification-time">Agora há pouco</span>
-                    </div>
-                    <p className="notification-message">
-                      Alto índice de ocorrências reportadas na região do Centro. Evite a Rua das Flores após às 18h.
-                    </p>
-                    <div className="notification-actions">
-                      <button className="action-button primary">Ver no Mapa</button>
-                      <button className="action-button">Ignorar</button>
-                    </div>
-                  </div>
-                  <div className="notification-badge new"></div>
-                </div>
-
-                <div className="notification-item important">
-                  <div className="notification-icon">🛡️</div>
-                  <div className="notification-content">
-                    <div className="notification-header">
-                      <h4>Denúncia Encaminhada</h4>
-                      <span className="notification-time">15 min atrás</span>
-                    </div>
-                    <p className="notification-message">
-                      Sua denúncia #2847 foi encaminhada para a Delegacia da Mulher e está em processamento.
-                    </p>
-                    <div className="notification-meta">
-                      <span className="meta-item">📋 Protocolo: #2847</span>
-                      <span className="meta-item">⚖️ Status: Em análise</span>
-                    </div>
-                  </div>
-                  <div className="notification-badge new"></div>
-                </div>
-
-                <div className="notification-item community">
-                  <div className="notification-icon">👥</div>
-                  <div className="notification-content">
-                    <div className="notification-header">
-                      <h4>Nova Mensagem na Comunidade</h4>
-                      <span className="notification-time">1 hora atrás</span>
-                    </div>
-                    <p className="notification-message">
-                      <strong>Anônima23</strong> compartilhou uma experiência e está buscando apoio.
-                    </p>
-                    <div className="notification-actions">
-                      <button className="action-button primary">Ver Conversa</button>
-                      <button className="action-button">Responder</button>
-                    </div>
-                  </div>
-                  <div className="notification-badge new"></div>
-                </div>
-
-                <div className="notification-item info">
-                  <div className="notification-icon">🏥</div>
-                  <div className="notification-content">
-                    <div className="notification-header">
-                      <h4>Ponto de Apoio Próximo</h4>
-                      <span className="notification-time">2 horas atrás</span>
-                    </div>
-                    <p className="notification-message">
-                      Você está próxima ao Hospital Municipal - plantão 24h disponível.
-                    </p>
-                    <div className="notification-meta">
-                      <span className="meta-item">📍 1.2km de distância</span>
-                      <span className="meta-item">📞 (11) 3333-4444</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="notification-item system">
-                  <div className="notification-icon">🔄</div>
-                  <div className="notification-content">
-                    <div className="notification-header">
-                      <h4>Mapa de Risco Atualizado</h4>
-                      <span className="notification-time">5 horas atrás</span>
-                    </div>
-                    <p className="notification-message">
-                      Novas áreas de risco foram identificadas na sua região. Verifique as rotas seguras atualizadas.
-                    </p>
-                    <div className="notification-actions">
-                      <button className="action-button primary">Ver Mapa</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="notification-item tip">
-                  <div className="notification-icon">💡</div>
-                  <div className="notification-content">
-                    <div className="notification-header">
-                      <h4>Dica de Segurança</h4>
-                      <span className="notification-time">Ontem</span>
-                    </div>
-                    <p className="notification-message">
-                      Ao usar transporte por aplicativo, verifique sempre a placa e modelo do veículo antes de entrar.
-                    </p>
-                    <div className="notification-meta">
-                      <span className="meta-item">📱 Compartilhe com amigas</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="notification-item event">
-                  <div className="notification-icon">📅</div>
-                  <div className="notification-content">
-                    <div className="notification-header">
-                      <h4>Workshop de Autodefesa</h4>
-                      <span className="notification-time">2 dias atrás</span>
-                    </div>
-                    <p className="notification-message">
-                      Participe do workshop gratuito de autodefesa para mulheres neste sábado, às 14h no Centro Comunitário.
-                    </p>
-                    <div className="notification-meta">
-                      <span className="meta-item">📍 Centro Comunitário - Jardins</span>
-                      <span className="meta-item">⏰ Sábado - 14h</span>
-                    </div>
-                    <div className="notification-actions">
-                      <button className="action-button primary">Confirmar Presença</button>
-                      <button className="action-button">Compartilhar</button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="notification-item system">
-                  <div className="notification-icon">📊</div>
-                  <div className="notification-content">
-                    <div className="notification-header">
-                      <h4>Relatório Semanal de Segurança</h4>
-                      <span className="notification-time">3 dias atrás</span>
-                    </div>
-                    <p className="notification-message">
-                      Sua região teve uma redução de 15% em ocorrências esta semana. Continue seguindo as rotas seguras!
-                    </p>
-                    <div className="notification-meta">
-                      <span className="meta-item">📈 Tendência: Melhorando</span>
-                      <span className="meta-item">🛡️ 89% de segurança</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="notifications-sidebar">
-                <div className="sidebar-card">
-                  <h4>📋 Tipos de Notificação</h4>
-                  <div className="notification-types">
-                    <div className="type-item">
-                      <span className="type-dot critical"></span>
-                      <span>Alertas Críticos</span>
-                      <span className="type-count">3</span>
-                    </div>
-                    <div className="type-item">
-                      <span className="type-dot important"></span>
-                      <span>Importantes</span>
-                      <span className="type-count">5</span>
-                    </div>
-                    <div className="type-item">
-                      <span className="type-dot community"></span>
-                      <span>Comunidade</span>
-                      <span className="type-count">8</span>
-                    </div>
-                    <div className="type-item">
-                      <span className="type-dot info"></span>
-                      <span>Informações</span>
-                      <span className="type-count">12</span>
-                    </div>
-                    <div className="type-item">
-                      <span className="type-dot system"></span>
-                      <span>Sistema</span>
-                      <span className="type-count">19</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="sidebar-card">
-                  <h4>🔔 Preferências</h4>
-                  <div className="preference-options">
-                    <label className="preference-checkbox">
-                      <input type="checkbox" defaultChecked />
-                      <span>Alertas de emergência</span>
-                    </label>
-                    <label className="preference-checkbox">
-                      <input type="checkbox" defaultChecked />
-                      <span>Notificações de segurança</span>
-                    </label>
-                    <label className="preference-checkbox">
-                      <input type="checkbox" defaultChecked />
-                      <span>Atualizações da comunidade</span>
-                    </label>
-                    <label className="preference-checkbox">
-                      <input type="checkbox" />
-                      <span>Notificações de marketing</span>
-                    </label>
-                    <label className="preference-checkbox">
-                      <input type="checkbox" defaultChecked />
-                      <span>Dicas de segurança</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="sidebar-card">
-                  <h4>📱 Receber Notificações</h4>
-                  <div className="notification-methods">
-                    <button className="method-button active">
-                      <span>📲 Push</span>
-                      <span className="method-status">Ativo</span>
-                    </button>
-                    <button className="method-button">
-                      <span>📧 Email</span>
-                      <span className="method-status">Inativo</span>
-                    </button>
-                    <button className="method-button">
-                      <span>💬 SMS</span>
-                      <span className="method-status">Inativo</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="sidebar-card emergency-card">
-                  <h4>🚨 Alertas Rápidos</h4>
-                  <p>Configure alertas para situações específicas:</p>
-                  <div className="quick-alerts">
-                    <button className="alert-button">
-                      ⚠️ Áreas de risco próximas
-                    </button>
-                    <button className="alert-button">
-                      📍 Mudança de localização
-                    </button>
-                    <button className="alert-button">
-                      👥 Atividade da comunidade
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+            </>
+          </AuthRequired>
         );
       
       case 'settings':
         return (
-          <>
-            <h1 className="page-title">Configurações</h1>
-            <p className="page-subtitle">Gerencie suas preferências, privacidade e configurações da conta.</p>
+          <AuthRequired 
+            isAuthenticated={isAuthenticated}
+            onShowAuth={() => {
+              setAuthMode('login');
+              setShowAuthModal(true);
+            }}
+          >
+            <>
+              <h1 className="page-title">Configurações</h1>
+              <p className="page-subtitle">Gerencie suas preferências, privacidade e configurações da conta.</p>
 
-            <div className="settings-page-content">
-              <div className="profile-section">
-                <div className="profile-header">
-                  <div className="profile-avatar-large">
-                    <span>SF</span>
-                  </div>
-                  <div className="profile-info">
-                    <h3>Segurança Feminina</h3>
-                    <p>usuária@email.com</p>
-                    <span className="profile-status">Conta verificada</span>
-                  </div>
-                  <button className="secondary-button">
-                    ✏️ Editar Perfil
-                  </button>
-                </div>
-              </div>
-
-              <div className="settings-category">
-                <h3>🔒 Segurança e Privacidade</h3>
-                <div className="settings-grid">
-                  <div className="setting-card">
-                    <div className="setting-icon">🔐</div>
-                    <div className="setting-info">
-                      <h4>Senha e Autenticação</h4>
-                      <p>Altere sua senha e configure autenticação de dois fatores</p>
+              <div className="settings-page-content">
+                <div className="profile-section">
+                  <div className="profile-header">
+                    <div className="profile-avatar-large">
+                      <span>{user?.name?.charAt(0) || 'U'}</span>
                     </div>
-                    <button className="text-button">
-                      Alterar
-                    </button>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">📱</div>
-                    <div className="setting-info">
-                      <h4>Dispositivos Conectados</h4>
-                      <p>Gerencie dispositivos com acesso à sua conta</p>
+                    <div className="profile-info">
+                      <h3>{user?.name || 'Usuária'}</h3>
+                      <p>{user?.email || 'usuária@email.com'}</p>
+                      <span className="profile-status">Conta {isAuthenticated ? 'verificada' : 'não verificada'}</span>
                     </div>
-                    <button className="text-button">
-                      Gerenciar
-                    </button>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">👁️</div>
-                    <div className="setting-info">
-                      <h4>Privacidade</h4>
-                      <p>Controle quem pode ver suas informações</p>
-                    </div>
-                    <button className="text-button">
-                      Configurar
-                    </button>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">🗑️</div>
-                    <div className="setting-info">
-                      <h4>Dados e Backup</h4>
-                      <p>Exporte ou exclua seus dados</p>
-                    </div>
-                    <button className="text-button">
-                      Gerenciar
+                    <button className="secondary-button">
+                      ✏️ Editar Perfil
                     </button>
                   </div>
                 </div>
-              </div>
 
-              <div className="settings-category">
-                <h3>⚙️ Preferências do App</h3>
-                <div className="settings-grid">
-                  <div className="setting-card">
-                    <div className="setting-icon">🔔</div>
-                    <div className="setting-info">
-                      <h4>Notificações</h4>
-                      <p>Configure alertas e notificações push</p>
+                <div className="settings-category">
+                  <h3>🔒 Segurança e Privacidade</h3>
+                  <div className="settings-grid">
+                    <div className="setting-card">
+                      <div className="setting-icon">🔐</div>
+                      <div className="setting-info">
+                        <h4>Senha e Autenticação</h4>
+                        <p>Altere sua senha e configure autenticação de dois fatores</p>
+                      </div>
+                      <button className="text-button">
+                        Alterar
+                      </button>
                     </div>
-                    <button className="text-button">
-                      Configurar
+
+                    <div className="setting-card">
+                      <div className="setting-icon">📱</div>
+                      <div className="setting-info">
+                        <h4>Dispositivos Conectados</h4>
+                        <p>Gerencie dispositivos com acesso à sua conta</p>
+                      </div>
+                      <button className="text-button">
+                        Gerenciar
+                      </button>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">👁️</div>
+                      <div className="setting-info">
+                        <h4>Privacidade</h4>
+                        <p>Controle quem pode ver suas informações</p>
+                      </div>
+                      <button className="text-button">
+                        Configurar
+                      </button>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">🗑️</div>
+                      <div className="setting-info">
+                        <h4>Dados e Backup</h4>
+                        <p>Exporte ou exclua seus dados</p>
+                      </div>
+                      <button className="text-button">
+                        Gerenciar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-category">
+                  <h3>⚙️ Preferências do App</h3>
+                  <div className="settings-grid">
+                    <div className="setting-card">
+                      <div className="setting-icon">🔔</div>
+                      <div className="setting-info">
+                        <h4>Notificações</h4>
+                        <p>Configure alertas e notificações push</p>
+                      </div>
+                      <button className="text-button">
+                        Configurar
+                      </button>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">🌙</div>
+                      <div className="setting-info">
+                        <h4>Tema</h4>
+                        <p>Escolha entre tema claro ou escuro</p>
+                      </div>
+                      <ThemeSelector />
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">🗣️</div>
+                      <div className="setting-info">
+                        <h4>Idioma</h4>
+                        <p>Português (Brasil)</p>
+                      </div>
+                      <button className="text-button">
+                        Alterar
+                      </button>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">📏</div>
+                      <div className="setting-info">
+                        <h4>Unidades de Medida</h4>
+                        <p>Quilômetros ou Milhas</p>
+                      </div>
+                      <UnitSelector />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-category">
+                  <h3>🚨 Configurações de Emergência</h3>
+                  <div className="settings-grid">
+                    <div className="setting-card">
+                      <div className="setting-icon">👥</div>
+                      <div className="setting-info">
+                        <h4>Contatos de Emergência</h4>
+                        <p>3 contatos configurados</p>
+                      </div>
+                      <button className="text-button">
+                        Gerenciar
+                      </button>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">📍</div>
+                      <div className="setting-info">
+                        <h4>Compartilhamento de Localização</h4>
+                        <p>Configurações de privacidade de localização</p>
+                      </div>
+                      <button className="text-button">
+                        Configurar
+                      </button>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">🎵</div>
+                      <div className="setting-info">
+                        <h4>Som do Pânico</h4>
+                        <p>Ativar som ao acionar botão de emergência</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="panic-sound" defaultChecked />
+                        <label htmlFor="panic-sound" className="toggle-slider"></label>
+                      </div>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">📳</div>
+                      <div className="setting-info">
+                        <h4>Vibração de Emergência</h4>
+                        <p>Vibrar ao acionar botão de emergência</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="panic-vibration" defaultChecked />
+                        <label htmlFor="panic-vibration" className="toggle-slider"></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-category">
+                  <h3>💬 Comunicação</h3>
+                  <div className="settings-options">
+                    <div className="setting-option">
+                      <div className="option-info">
+                        <h4>Notificações por Email</h4>
+                        <p>Receba atualizações importantes por email</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="email-notifications" defaultChecked />
+                        <label htmlFor="email-notifications" className="toggle-slider"></label>
+                      </div>
+                    </div>
+
+                    <div className="setting-option">
+                      <div className="option-info">
+                        <h4>Notificações por SMS</h4>
+                        <p>Alertas importantes por mensagem de texto</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="sms-notifications" />
+                        <label htmlFor="sms-notifications" className="toggle-slider"></label>
+                      </div>
+                    </div>
+
+                    <div className="setting-option">
+                      <div className="option-info">
+                        <h4>Notificações da Comunidade</h4>
+                        <p>Atualizações do fórum e comunidade</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="community-notifications" defaultChecked />
+                        <label htmlFor="community-notifications" className="toggle-slider"></label>
+                      </div>
+                    </div>
+
+                    <div className="setting-option">
+                      <div className="option-info">
+                        <h4>Alertas de Segurança</h4>
+                        <p>Notificações sobre áreas de risco</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="security-alerts" defaultChecked />
+                        <label htmlFor="security-alerts" className="toggle-slider"></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-category">
+                  <h3>🔧 Configurações Avançadas</h3>
+                  <div className="settings-grid">
+                    <div className="setting-card">
+                      <div className="setting-icon">🔄</div>
+                      <div className="setting-info">
+                        <h4>Atualização em Segundo Plano</h4>
+                        <p>Atualizar dados automaticamente</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="background-update" defaultChecked />
+                        <label htmlFor="background-update" className="toggle-slider"></label>
+                      </div>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">💾</div>
+                      <div className="setting-info">
+                        <h4>Modo Economia de Bateria</h4>
+                        <p>Reduzir consumo de bateria</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="battery-saver" />
+                        <label htmlFor="battery-saver" className="toggle-slider"></label>
+                      </div>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">📊</div>
+                      <div className="setting-info">
+                        <h4>Compartilhar Dados Anônimos</h4>
+                        <p>Ajudar a melhorar o aplicativo</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="share-data" defaultChecked />
+                        <label htmlFor="share-data" className="toggle-slider"></label>
+                      </div>
+                    </div>
+
+                    <div className="setting-card">
+                      <div className="setting-icon">🐞</div>
+                      <div className="setting-info">
+                        <h4>Modo Desenvolvedor</h4>
+                        <p>Configurações avançadas para desenvolvedores</p>
+                      </div>
+                      <div className="toggle-switch">
+                        <input type="checkbox" id="developer-mode" />
+                        <label htmlFor="developer-mode" className="toggle-slider"></label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-category">
+                  <h3>📋 Ações da Conta</h3>
+                  <div className="account-actions">
+                    <button className="action-button secondary">
+                      📥 Exportar Dados
+                    </button>
+                    <button 
+                      className="action-button secondary"
+                      onClick={() => setShowLogoutModal('delete')}
+                    >
+                      🗑️ Excluir Conta
+                    </button>
+                    <button 
+                      className="action-button danger"
+                      onClick={() => setShowLogoutModal('session')}
+                    >
+                      🚪 Sair da Conta
                     </button>
                   </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">🌙</div>
-                    <div className="setting-info">
-                      <h4>Tema</h4>
-                      <p>Escolha entre tema claro ou escuro</p>
-                    </div>
-                    <ThemeSelector />
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">🗣️</div>
-                    <div className="setting-info">
-                      <h4>Idioma</h4>
-                      <p>Português (Brasil)</p>
-                    </div>
-                    <button className="text-button">
-                      Alterar
-                    </button>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">📏</div>
-                    <div className="setting-info">
-                      <h4>Unidades de Medida</h4>
-                      <p>Quilômetros ou Milhas</p>
-                    </div>
-                    <UnitSelector />
-                  </div>
                 </div>
-              </div>
 
-              <div className="settings-category">
-                <h3>🚨 Configurações de Emergência</h3>
-                <div className="settings-grid">
-                  <div className="setting-card">
-                    <div className="setting-icon">👥</div>
-                    <div className="setting-info">
-                      <h4>Contatos de Emergência</h4>
-                      <p>3 contatos configurados</p>
+                <div className="app-info">
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <span className="info-label">Versão do App</span>
+                      <span className="info-value">2.1.0</span>
                     </div>
-                    <button className="text-button">
-                      Gerenciar
-                    </button>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">📍</div>
-                    <div className="setting-info">
-                      <h4>Compartilhamento de Localização</h4>
-                      <p>Configurações de privacidade de localização</p>
+                    <div className="info-item">
+                      <span className="info-label">Última Atualização</span>
+                      <span className="info-value">12/11/2024</span>
                     </div>
-                    <button className="text-button">
-                      Configurar
-                    </button>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">🎵</div>
-                    <div className="setting-info">
-                      <h4>Som do Pânico</h4>
-                      <p>Ativar som ao acionar botão de emergência</p>
+                    <div className="info-item">
+                      <span className="info-label">Política de Privacidade</span>
+                      <button className="text-button small">Ver</button>
                     </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="panic-sound" defaultChecked />
-                      <label htmlFor="panic-sound" className="toggle-slider"></label>
-                    </div>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">📳</div>
-                    <div className="setting-info">
-                      <h4>Vibração de Emergência</h4>
-                      <p>Vibrar ao acionar botão de emergência</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="panic-vibration" defaultChecked />
-                      <label htmlFor="panic-vibration" className="toggle-slider"></label>
+                    <div className="info-item">
+                      <span className="info-label">Termos de Uso</span>
+                      <button className="text-button small">Ver</button>
                     </div>
                   </div>
                 </div>
               </div>
-
-              <div className="settings-category">
-                <h3>💬 Comunicação</h3>
-                <div className="settings-options">
-                  <div className="setting-option">
-                    <div className="option-info">
-                      <h4>Notificações por Email</h4>
-                      <p>Receba atualizações importantes por email</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="email-notifications" defaultChecked />
-                      <label htmlFor="email-notifications" className="toggle-slider"></label>
-                    </div>
-                  </div>
-
-                  <div className="setting-option">
-                    <div className="option-info">
-                      <h4>Notificações por SMS</h4>
-                      <p>Alertas importantes por mensagem de texto</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="sms-notifications" />
-                      <label htmlFor="sms-notifications" className="toggle-slider"></label>
-                    </div>
-                  </div>
-
-                  <div className="setting-option">
-                    <div className="option-info">
-                      <h4>Notificações da Comunidade</h4>
-                      <p>Atualizações do fórum e comunidade</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="community-notifications" defaultChecked />
-                      <label htmlFor="community-notifications" className="toggle-slider"></label>
-                    </div>
-                  </div>
-
-                  <div className="setting-option">
-                    <div className="option-info">
-                      <h4>Alertas de Segurança</h4>
-                      <p>Notificações sobre áreas de risco</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="security-alerts" defaultChecked />
-                      <label htmlFor="security-alerts" className="toggle-slider"></label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-category">
-                <h3>🔧 Configurações Avançadas</h3>
-                <div className="settings-grid">
-                  <div className="setting-card">
-                    <div className="setting-icon">🔄</div>
-                    <div className="setting-info">
-                      <h4>Atualização em Segundo Plano</h4>
-                      <p>Atualizar dados automaticamente</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="background-update" defaultChecked />
-                      <label htmlFor="background-update" className="toggle-slider"></label>
-                    </div>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">💾</div>
-                    <div className="setting-info">
-                      <h4>Modo Economia de Bateria</h4>
-                      <p>Reduzir consumo de bateria</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="battery-saver" />
-                      <label htmlFor="battery-saver" className="toggle-slider"></label>
-                    </div>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">📊</div>
-                    <div className="setting-info">
-                      <h4>Compartilhar Dados Anônimos</h4>
-                      <p>Ajudar a melhorar o aplicativo</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="share-data" defaultChecked />
-                      <label htmlFor="share-data" className="toggle-slider"></label>
-                    </div>
-                  </div>
-
-                  <div className="setting-card">
-                    <div className="setting-icon">🐞</div>
-                    <div className="setting-info">
-                      <h4>Modo Desenvolvedor</h4>
-                      <p>Configurações avançadas para desenvolvedores</p>
-                    </div>
-                    <div className="toggle-switch">
-                      <input type="checkbox" id="developer-mode" />
-                      <label htmlFor="developer-mode" className="toggle-slider"></label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="settings-category">
-                <h3>📋 Ações da Conta</h3>
-                <div className="account-actions">
-                  <button className="action-button secondary">
-                    📥 Exportar Dados
-                  </button>
-                  <button className="action-button secondary">
-                    🗑️ Excluir Conta
-                  </button>
-                  <button className="action-button danger">
-                    🚪 Sair da Conta
-                  </button>
-                </div>
-              </div>
-
-              <div className="app-info">
-                <div className="info-grid">
-                  <div className="info-item">
-                    <span className="info-label">Versão do App</span>
-                    <span className="info-value">2.1.0</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-label">Última Atualização</span>
-                    <span className="info-value">12/11/2024</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-label">Política de Privacidade</span>
-                    <button className="text-button small">Ver</button>
-                  </div>
-                  <div className="info-item">
-                    <span className="info-label">Termos de Uso</span>
-                    <button className="text-button small">Ver</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+            </>
+          </AuthRequired>
         );
       
-      case 'logout':
+      case 'auth':
         return (
           <>
-            <h1 className="page-title">Sair</h1>
+            <h1 className="page-title">{isAuthenticated ? 'Sair' : 'Entrar'}</h1>
             <p className="page-subtitle">Gerencie o encerramento da sua sessão e dados da conta.</p>
 
             <div className="logout-page-content">
@@ -2409,173 +2677,95 @@ export default function App() {
                 <div className="session-card">
                   <div className="session-icon">👤</div>
                   <div className="session-details">
-                    <h3>Sessão Ativa</h3>
+                    <h3>Sessão {isAuthenticated ? 'Ativa' : 'Inativa'}</h3>
                     <div className="session-meta">
                       <div className="meta-item">
                         <span className="meta-label">Usuária:</span>
-                        <span className="meta-value">Segurança Feminina</span>
+                        <span className="meta-value">{user?.name || 'Não autenticada'}</span>
                       </div>
                       <div className="meta-item">
                         <span className="meta-label">Email:</span>
-                        <span className="meta-value">usuária@email.com</span>
+                        <span className="meta-value">{user?.email || 'Não disponível'}</span>
                       </div>
                       <div className="meta-item">
-                        <span className="meta-label">Sessão iniciada:</span>
-                        <span className="meta-value">Hoje às 08:30</span>
-                      </div>
-                      <div className="meta-item">
-                        <span className="meta-label">Tempo online:</span>
-                        <span className="meta-value">4 horas 25 minutos</span>
+                        <span className="meta-label">Status:</span>
+                        <span className="meta-value">{isAuthenticated ? 'Conectada' : 'Desconectada'}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="session-status active">
+                  <div className={`session-status ${isAuthenticated ? 'active' : ''}`}>
                     <span>●</span>
-                    Ativa
+                    {isAuthenticated ? 'Ativa' : 'Inativa'}
                   </div>
                 </div>
               </div>
 
               <div className="logout-options">
-                <h3>Opções de Saída</h3>
+                <h3>Opções de {isAuthenticated ? 'Saída' : 'Entrada'}</h3>
                 <div className="options-grid">
-                  <div className="logout-option-card">
-                    <div className="option-icon">🚪</div>
-                    <div className="option-content">
-                      <h4>Sair da Conta</h4>
-                      <p>Encerre sua sessão atual e faça login novamente quando quiser</p>
-                      <ul className="option-features">
-                        <li>✓ Mantém todos os seus dados</li>
-                        <li>✓ Histórico preservado</li>
-                        <li>✓ Configurações salvas</li>
-                      </ul>
-                    </div>
-                    <button 
-                      className="logout-button secondary"
-                      onClick={() => setShowLogoutModal('session')}
-                    >
-                      Sair da Conta
-                    </button>
-                  </div>
-
-                  <div className="logout-option-card">
-                    <div className="option-icon">🗑️</div>
-                    <div className="option-content">
-                      <h4>Excluir Conta</h4>
-                      <p>Remova permanentemente sua conta e todos os dados associados</p>
-                      <ul className="option-features">
-                        <li>⚠️ Todos os dados serão perdidos</li>
-                        <li>⚠️ Histórico excluído</li>
-                        <li>⚠️ Ação irreversível</li>
-                      </ul>
-                    </div>
-                    <button 
-                      className="logout-button danger"
-                      onClick={() => setShowLogoutModal('delete')}
-                    >
-                      Excluir Conta
-                    </button>
-                  </div>
-
-                  <div className="logout-option-card">
-                    <div className="option-icon">🔒</div>
-                    <div className="option-content">
-                      <h4>Modo Anônimo</h4>
-                      <p>Continue usando o app sem estar logada</p>
-                      <ul className="option-features">
-                        <li>✓ Navegação básica disponível</li>
-                        <li>✓ Algumas funcionalidades limitadas</li>
-                        <li>✓ Dados locais apenas</li>
-                      </ul>
-                    </div>
-                    <button 
-                      className="logout-button primary"
-                      onClick={() => setShowLogoutModal('anonymous')}
-                    >
-                      Entrar como Anônima
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="devices-section">
-                <h3>Dispositivos Conectados</h3>
-                <div className="devices-list">
-                  <div className="device-item">
-                    <div className="device-info">
-                      <div className="device-icon">📱</div>
-                      <div className="device-details">
-                        <h5>iPhone 14 Pro</h5>
-                        <p>Dispositivo atual • iOS 17.1.1</p>
-                        <span className="device-time">Conectado agora</span>
+                  {isAuthenticated ? (
+                    <>
+                      <div className="logout-option-card">
+                        <div className="option-icon">🚪</div>
+                        <div className="option-content">
+                          <h4>Sair da Conta</h4>
+                          <p>Encerre sua sessão atual e faça login novamente quando quiser</p>
+                          <ul className="option-features">
+                            <li>✓ Mantém todos os seus dados</li>
+                            <li>✓ Histórico preservado</li>
+                            <li>✓ Configurações salvas</li>
+                          </ul>
+                        </div>
+                        <button 
+                          className="logout-button secondary"
+                          onClick={() => setShowLogoutModal('session')}
+                        >
+                          Sair da Conta
+                        </button>
                       </div>
-                    </div>
-                    <div className="device-status current">
-                      Atual
-                    </div>
-                  </div>
 
-                  <div className="device-item">
-                    <div className="device-info">
-                      <div className="device-icon">💻</div>
-                      <div className="device-details">
-                        <h5>MacBook Air</h5>
-                        <p>MacOS Ventura • Safari</p>
-                        <span className="device-time">2 horas atrás</span>
+                      <div className="logout-option-card">
+                        <div className="option-icon">🗑️</div>
+                        <div className="option-content">
+                          <h4>Excluir Conta</h4>
+                          <p>Remova permanentemente sua conta e todos os dados associados</p>
+                          <ul className="option-features">
+                            <li>⚠️ Todos os dados serão perdidos</li>
+                            <li>⚠️ Histórico excluído</li>
+                            <li>⚠️ Ação irreversível</li>
+                          </ul>
+                        </div>
+                        <button 
+                          className="logout-button danger"
+                          onClick={() => setShowLogoutModal('delete')}
+                        >
+                          Excluir Conta
+                        </button>
                       </div>
-                    </div>
-                    <button className="text-button small">
-                      Desconectar
-                    </button>
-                  </div>
-
-                  <div className="device-item">
-                    <div className="device-info">
-                      <div className="device-icon">📱</div>
-                      <div className="device-details">
-                        <h5>Samsung Galaxy S23</h5>
-                        <p>Android 14 • Chrome</p>
-                        <span className="device-time">3 dias atrás</span>
+                    </>
+                  ) : (
+                    <div className="logout-option-card">
+                      <div className="option-icon">🔐</div>
+                      <div className="option-content">
+                        <h4>Fazer Login</h4>
+                        <p>Acesse sua conta para usar todas as funcionalidades do app</p>
+                        <ul className="option-features">
+                          <li>✓ Acesso completo ao app</li>
+                          <li>✓ Histórico pessoal</li>
+                          <li>✓ Configurações salvas</li>
+                        </ul>
                       </div>
+                      <button 
+                        className="logout-button primary"
+                        onClick={() => {
+                          setAuthMode('login');
+                          setShowAuthModal(true);
+                        }}
+                      >
+                        Fazer Login
+                      </button>
                     </div>
-                    <button className="text-button small">
-                      Desconectar
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="security-tips">
-                <h3>💡 Dicas de Segurança</h3>
-                <div className="tips-grid">
-                  <div className="tip-item">
-                    <div className="tip-icon">🔐</div>
-                    <div className="tip-content">
-                      <h5>Senha Forte</h5>
-                      <p>Use uma senha única e complexa para sua conta</p>
-                    </div>
-                  </div>
-                  <div className="tip-item">
-                    <div className="tip-icon">📧</div>
-                    <div className="tip-content">
-                      <h5>Email Seguro</h5>
-                      <p>Mantenha seu email de recuperação atualizado</p>
-                    </div>
-                  </div>
-                  <div className="tip-item">
-                    <div className="tip-icon">📱</div>
-                    <div className="tip-content">
-                      <h5>Dispositivos</h5>
-                      <p>Revise regularmente os dispositivos conectados</p>
-                    </div>
-                  </div>
-                  <div className="tip-item">
-                    <div className="tip-icon">🚨</div>
-                    <div className="tip-content">
-                      <h5>Emergência</h5>
-                      <p>Mantenha seus contatos de emergência atualizados</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2617,13 +2807,38 @@ export default function App() {
           {menuItems.map(item => (
             <div
               key={item.id}
-              className={`menu-item ${activePage === item.id ? 'active' : ''}`}
-              onClick={() => setActivePage(item.id)}
+              className={`menu-item ${activePage === item.id ? 'active' : ''} ${item.requiresAuth ? 'requires-auth' : ''}`}
+              onClick={() => handleMenuClick(item)}
             >
               <item.icon />
               <span>{item.label}</span>
             </div>
           ))}
+        </div>
+        
+        {/* Status de autenticação na sidebar */}
+        <div className="auth-status">
+          {isAuthenticated ? (
+            <div className="user-info-sidebar">
+              <div className="user-avatar-small">
+                {user?.name?.charAt(0) || 'U'}
+              </div>
+              <div className="user-details">
+                <span className="user-name">{user?.name || 'Usuária'}</span>
+                <span className="user-status">Conectada</span>
+              </div>
+            </div>
+          ) : (
+            <button 
+              className="login-prompt"
+              onClick={() => {
+                setAuthMode('login');
+                setShowAuthModal(true);
+              }}
+            >
+              🔐 Fazer Login
+            </button>
+          )}
         </div>
       </nav>
 
@@ -2638,14 +2853,220 @@ export default function App() {
           </div>
           <div className="header-icons">
             <NotificationIcon />
-            <div className="profile-avatar">SF</div>
+            <div className="profile-avatar">
+              {isAuthenticated ? (
+                <div 
+                  className="authenticated-user"
+                  onClick={() => setActivePage('settings')}
+                >
+                  {user?.name?.charAt(0) || 'U'}
+                </div>
+              ) : (
+                <div 
+                  className="guest-user"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setShowAuthModal(true);
+                  }}
+                >
+                  <span>👤</span>
+                </div>
+              )}
+            </div>
           </div>
         </header>
+
+        {/* Mensagem de autenticação */}
+        {authMessage && (
+          <div className={`auth-message ${authMessage.split('::')[0]}`}>
+            {authMessage.split('::')[1]}
+          </div>
+        )}
 
         <div className="content">
           {renderPage()}
         </div>
       </main>
+
+      {/* Modal de Autenticação */}
+      {showAuthModal && (
+        <div className="modal-overlay">
+          <div className="modal auth-modal">
+            <button className="modal-close" onClick={() => setShowAuthModal(false)}>
+              ✕
+            </button>
+            
+            <div className="auth-tabs">
+              <button 
+                className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
+                onClick={() => setAuthMode('login')}
+              >
+                Entrar
+              </button>
+              <button 
+                className={`auth-tab ${authMode === 'register' ? 'active' : ''}`}
+                onClick={() => setAuthMode('register')}
+              >
+                Cadastrar
+              </button>
+            </div>
+
+            {authMessage && (
+              <div className={`auth-message ${authMessage.split('::')[0]}`}>
+                {authMessage.split('::')[1]}
+              </div>
+            )}
+
+            {authMode === 'login' ? (
+              <form onSubmit={handleLogin} className="auth-form">
+                <h2>Entrar na Conta</h2>
+                
+                <div className="form-group">
+                  <label>Email:</label>
+                  <input
+                    type="email"
+                    value={loginData.email}
+                    onChange={(e) => setLoginData(prev => ({...prev, email: e.target.value}))}
+                    required
+                    placeholder="seu@email.com"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Senha:</label>
+                  <input
+                    type="password"
+                    value={loginData.password_hash}
+                    onChange={(e) => setLoginData(prev => ({...prev, password_hash: e.target.value}))}
+                    required
+                    placeholder="Sua senha"
+                  />
+                </div>
+
+                <button type="submit" className="primary-button">
+                  Entrar
+                </button>
+
+                <div className="auth-links">
+                  <button type="button" className="text-button">
+                    Esqueci minha senha
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister} className="auth-form">
+                <h2>Criar Conta</h2>
+                
+                <div className="form-group">
+                  <label>Nome completo:</label>
+                  <input
+                    type="text"
+                    value={registerData.name}
+                    onChange={(e) => setRegisterData(prev => ({...prev, name: e.target.value}))}
+                    required
+                    placeholder="Seu nome completo"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Email:</label>
+                  <input
+                    type="email"
+                    value={registerData.email}
+                    onChange={(e) => setRegisterData(prev => ({...prev, email: e.target.value}))}
+                    required
+                    placeholder="seu@email.com"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Senha:</label>
+                  <input
+                    type="password"
+                    value={registerData.password_hash}
+                    onChange={(e) => setRegisterData(prev => ({...prev, password_hash: e.target.value}))}
+                    required
+                    placeholder="Crie uma senha segura"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Idade:</label>
+                    <input
+                      type="number"
+                      value={registerData.age}
+                      onChange={(e) => setRegisterData(prev => ({...prev, age: e.target.value}))}
+                      required
+                      min="1"
+                      max="120"
+                      placeholder="18"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Gênero:</label>
+                    <select
+                      value={registerData.gender}
+                      onChange={(e) => setRegisterData(prev => ({...prev, gender: e.target.value}))}
+                      required
+                    >
+                      <option value="">Selecione</option>
+                      <option value="female">Feminino</option>
+                      <option value="male">Masculino</option>
+                      <option value="other">Outro</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Telefone:</label>
+                  <input
+                    type="tel"
+                    value={registerData.phoneNumber}
+                    onChange={(e) => setRegisterData(prev => ({...prev, phoneNumber: e.target.value}))}
+                    required
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Cidade:</label>
+                    <input
+                      type="text"
+                      value={registerData.city}
+                      onChange={(e) => setRegisterData(prev => ({...prev, city: e.target.value}))}
+                      placeholder="Sua cidade"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Bairro:</label>
+                    <input
+                      type="text"
+                      value={registerData.neighborhood}
+                      onChange={(e) => setRegisterData(prev => ({...prev, neighborhood: e.target.value}))}
+                      placeholder="Seu bairro"
+                    />
+                  </div>
+                </div>
+
+                <button type="submit" className="primary-button">
+                  Criar Conta
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Logout (existente) */}
+      {showLogoutModal && (
+        <LogoutModal 
+          type={showLogoutModal}
+          onClose={() => setShowLogoutModal(null)}
+          onConfirm={handleLogout}
+        />
+      )}
     </div>
   );
 }
