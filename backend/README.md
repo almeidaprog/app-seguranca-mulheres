@@ -280,3 +280,333 @@ http://localhost:5000/api/users
 **Error Responses:**
 
 - **500 Internal Server Error:** Server error
+
+# API Documentation - Emergency Contacts
+
+## Base URL
+
+http://localhost:5000/api/emergency-contacts
+
+## Authentication
+
+All endpoints require authentication. Include session cookie in requests.
+
+## Endpoints
+
+### GET /search
+
+**Description:** Search for app users to add as emergency contacts. Excludes the current user from results.
+
+**Query Parameters:**
+- `search` (string, required): Name or email to search for
+
+**Example Request:**
+```
+GET /api/emergency-contacts/search?search=joao
+```
+
+**Response:**
+- **Status Code:** 200 OK
+- **Body:**
+```json
+{
+  "success": true,
+  "users": [
+    {
+      "id": "507f1f77bcf86cd799439011",
+      "name": "João Silva",
+      "email": "joao@email.com",
+      "phone": "11999999999"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- **400 Bad Request:** Missing search parameter
+- **401 Unauthorized:** User not logged in
+- **500 Internal Server Error:** Server error
+
+### POST /
+
+**Description:** Add a new emergency contact (app user or external contact)
+
+**Request Body:**
+```json
+{
+  "contactType": "app_user",
+  "appUserId": "507f1f77bcf86cd799439011"
+}
+```
+OR
+```json
+{
+  "contactType": "external",
+  "externalContact": {
+    "name": "Mãe",
+    "phone": "11999999999",
+    "email": "mae@email.com",
+    "relationship": "Mãe"
+  }
+}
+```
+
+**Response:**
+- **Status Code:** 201 Created
+- **Body:**
+```json
+{
+  "success": true,
+  "message": "Contact added sucefully",
+  "contact": {
+    "_id": "692354301483afb1a08493e4",
+    "user": "691e7f1a3e5121bf539578e9",
+    "contactType": "external",
+    "externalContact": {
+      "name": "Mãe",
+      "phone": "11999999999",
+      "email": "mae@email.com",
+      "relationship": "Mãe"
+    },
+    "notifications": {
+      "routeAlerts": true,
+      "emergencyAlerts": true
+    },
+    "createdAt": "2025-11-23T18:36:32.693Z",
+    "updatedAt": "2025-11-23T18:36:32.693Z"
+  }
+}
+```
+
+**Error Responses:**
+- **400 Bad Request:** Invalid data, missing required fields, or contact already exists
+- **401 Unauthorized:** User not logged in
+- **404 Not Found:** App user not found (when contactType is 'app_user')
+- **500 Internal Server Error:** Server error
+
+### GET /
+
+**Description:** Get all emergency contacts for the logged-in user
+
+**Response:**
+- **Status Code:** 200 OK
+- **Body:**
+```json
+{
+  "success": true,
+  "contacts": [
+    {
+      "id": "692354301483afb1a08493e4",
+      "contactType": "external",
+      "name": "Larissa Codes",
+      "phoneNumber": "(71) 99879-9998",
+      "email": "lari98yy@amil.com",
+      "relationship": "irma",
+      "isAppUser": false,
+      "notifications": {
+        "routeAlerts": true,
+        "emergencyAlerts": true
+      }
+    },
+    {
+      "id": "69234fb92c883de678776640",
+      "contactType": "app_user",
+      "name": "User not found",
+      "phoneNumber": "N/A",
+      "email": "N/A",
+      "isAppUser": true,
+      "isInvalid": true,
+      "notifications": {
+        "routeAlerts": true,
+        "emergencyAlerts": true
+      }
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- **401 Unauthorized:** User not logged in
+- **500 Internal Server Error:** Server error
+
+### PUT /:id
+
+**Description:** Update an emergency contact
+
+**URL Parameters:**
+- `id` (string, required): ID of the contact to update
+
+**Request Body:**
+For app_user contacts:
+```json
+{
+  "notifications": {
+    "routeAlerts": false,
+    "emergencyAlerts": true
+  }
+}
+```
+
+For external contacts:
+```json
+{
+  "notifications": {
+    "routeAlerts": true,
+    "emergencyAlerts": false
+  },
+  "name": "Novo Nome",
+  "email": "novo@email.com"
+}
+```
+
+**Response:**
+- **Status Code:** 200 OK
+- **Body:**
+```json
+{
+  "success": true,
+  "message": "Contact updated sucefully",
+  "contact": {
+    "id": "692354301483afb1a08493e4",
+    "contactType": "external",
+    "name": "Novo Nome",
+    "phoneNumber": "(71) 99879-9998",
+    "email": "novo@email.com",
+    "relationship": "irma",
+    "isAppUser": false,
+    "notifications": {
+      "routeAlerts": true,
+      "emergencyAlerts": false
+    }
+  }
+}
+```
+
+**Error Responses:**
+- **400 Bad Request:** Invalid data
+- **401 Unauthorized:** User not logged in
+- **403 Forbidden:** Contact does not belong to user
+- **404 Not Found:** Contact not found
+- **500 Internal Server Error:** Server error
+
+### DELETE /:id
+
+**Description:** Delete an emergency contact
+
+**URL Parameters:**
+- `id` (string, required): ID of the contact to delete
+
+**Response:**
+- **Status Code:** 200 OK
+- **Body:**
+```json
+{
+  "success": true,
+  "message": "Contact deleted sucefully",
+  "deletedContactId": "692354301483afb1a08493e4"
+}
+```
+
+**Error Responses:**
+- **401 Unauthorized:** User not logged in
+- **403 Forbidden:** Contact does not belong to user
+- **404 Not Found:** Contact not found
+- **500 Internal Server Error:** Server error
+
+# API Documentation - AI Risk Detection
+
+## Base URL
+
+http://localhost:5000/api/ai
+
+## Authentication
+
+All endpoints require authentication. Include session cookie in requests.
+
+## Endpoints
+
+### POST /listen/start
+
+**Description:** Starts the AI audio listening process for risk detection. Initiates Python analysis in the background.
+
+**Response:**
+- **Status Code:** 200 OK
+- **Body:**
+```json
+{
+  "success": true,
+  "message": "Listening session started successfully"
+}
+```
+
+**Error Responses:**
+- **400 Bad Request:** Listening already active
+- **401 Unauthorized:** User not logged in
+- **500 Internal Server Error:** Server error or Python process failed to start
+
+### POST /listen/stop
+
+**Description:** Stops the AI audio listening process.
+
+**Response:**
+- **Status Code:** 200 OK
+- **Body:**
+```json
+{
+  "success": true,
+  "message": "Listening stopped sucefully"
+}
+```
+
+**Error Responses:**
+- **400 Bad Request:** No active listening session
+- **401 Unauthorized:** User not logged in
+- **500 Internal Server Error:** Server error
+
+### GET /listen/status
+
+**Description:** Checks if the AI listening process is currently active.
+
+**Response:**
+- **Status Code:** 200 OK
+- **Body:**
+```json
+{
+  "success": true,
+  "isListening": true
+}
+```
+
+**Error Responses:**
+- **401 Unauthorized:** User not logged in
+- **500 Internal Server Error:** Server error
+
+### GET /risks
+
+**Description:** Retrieves recent risk detection events for the authenticated user.
+
+**Response:**
+- **Status Code:** 200 OK
+- **Body:**
+```json
+{
+  "success": true,
+  "risks": [
+    {
+      "riskLevel": "critical",
+      "spokenWords": "socorro estou morrendo",
+      "timestamp": "2025-11-23T14:52:30.123Z"
+    },
+    {
+      "riskLevel": "high", 
+      "spokenWords": "alguém me ajuda por favor",
+      "timestamp": "2025-11-23T14:50:15.456Z"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- **401 Unauthorized:** User not logged in  
+- **500 Internal Server Error:** Server error
+
