@@ -10,16 +10,14 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # --- Config ---
-
 DATA_DIR = "augmented_audios_v2"
 CATEGORIES = ["normal", "risk"]
-SUBFOLDERS = ["", "bibia"] # Pasta principal + bibia
+SUBFOLDERS = ["", "bibia"]
 EPOCHS = 250
 BATCH_SIZE = 16
 MODEL_SAVE_PATH = "risk_audio_model_v2.keras"
 
 # --- Função para carregar e extrair features ---
-
 def load_data(base_dir):
     X = []
     y = []
@@ -41,26 +39,23 @@ def load_data(base_dir):
                         y.append(label)
                     except Exception as e:
                         print(f"⚠️ Erro ao processar {file_path}: {e}")
-    if len(X) == 0:
-        raise ValueError("Nenhum arquivo de áudio válido encontrado. Checa as pastas e arquivos .wav!")
 
-    # Normaliza os MFCCs
+    if len(X) == 0:
+        raise ValueError("Nenhum arquivo de áudio válido encontrado.")
+
     X = np.array(X)
     X = (X - np.mean(X, axis=0)) / (np.std(X, axis=0) + 1e-10)
     y = np.array(y)
 
-    # Shuffle
     indices = np.arange(len(X))
     np.random.shuffle(indices)
     return X[indices], y[indices]
 
 # --- Carrega dados ---
-
 X, y = load_data(DATA_DIR)
 print(f"✅ Dados carregados: {len(X)} áudios encontrados.")
 
 # --- Cria modelo ---
-
 model = Sequential([
     Dense(128, input_shape=(40,), activation="relu"),
     Dropout(0.3),
@@ -72,16 +67,23 @@ model = Sequential([
 model.compile(optimizer=Adam(learning_rate=0.0005), loss="binary_crossentropy", metrics=["accuracy"])
 print("🛠 Modelo compilado.")
 
-# --- Callbacks ---
-
-early_stop = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
+# --- Early stopping ---
+early_stop = EarlyStopping(
+    monitor='val_loss',
+    patience=20,
+    restore_best_weights=True
+)
 
 # --- Treina modelo ---
-
-print(f"Iniciando treinamento por {EPOCHS} epochs...")
-history = model.fit(X, y, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_split=0.2, callbacks=[early_stop], verbose=2)
+print(f"🏋️ Iniciando treinamento por {EPOCHS} epochs...")
+history = model.fit(
+    X, y,
+    epochs=EPOCHS,
+    batch_size=BATCH_SIZE,
+    validation_split=0.2,
+    verbose=2  # sem callbacks
+)
 
 # --- Salva modelo ---
-
 save_model(model, MODEL_SAVE_PATH)
 print(f"✅ Treinamento concluído e modelo salvo em {MODEL_SAVE_PATH}!")
