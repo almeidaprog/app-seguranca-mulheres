@@ -67,6 +67,69 @@ const apiService = {
   }
 };
 
+// Serviço API para Contatos de Emergência
+const EMERGENCY_CONTACTS_API_BASE_URL = 'http://localhost:5000/api/emergency-contacts';
+
+const emergencyContactsService = {
+  async request(endpoint, options = {}) {
+    const url = `${EMERGENCY_CONTACTS_API_BASE_URL}${endpoint}`;
+    
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      ...options,
+    };
+
+    if (options.body) {
+      config.body = JSON.stringify(options.body);
+    }
+
+    try {
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Erro na requisição');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na requisição de contatos:', error);
+      throw error;
+    }
+  },
+
+  async searchUsers(searchTerm) {
+    return this.request(`/search?search=${encodeURIComponent(searchTerm)}`);
+  },
+
+  async addContact(contactData) {
+    return this.request('/', { 
+      method: 'POST', 
+      body: contactData 
+    });
+  },
+
+  async getContacts() {
+    return this.request('/');
+  },
+
+  async updateContact(contactId, updateData) {
+    return this.request(`/${contactId}`, { 
+      method: 'PUT', 
+      body: updateData 
+    });
+  },
+
+  async deleteContact(contactId) {
+    return this.request(`/${contactId}`, { 
+      method: 'DELETE' 
+    });
+  }
+};
+
 // ÍCONES CORRETOS DO FIGMA
 const HomeIcon = () => (
   <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -221,6 +284,384 @@ const UnitSelector = () => {
             {unitOption.label}
           </button>
         ))}
+      </div>
+    </div>
+  );
+};
+
+// COMPONENTE PARA GERENCIAR CONTATOS DE EMERGÊNCIA
+const EmergencyContactsManager = () => {
+  const [contacts, setContacts] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [activeTab, setActiveTab] = useState('existing');
+
+  const [newExternalContact, setNewExternalContact] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    relationship: ''
+  });
+
+  useEffect(() => {
+    if (showModal) {
+      loadContacts();
+    }
+  }, [showModal]);
+
+  const loadContacts = async () => {
+    try {
+      setLoading(true);
+      const response = await emergencyContactsService.getContacts();
+      setContacts(response.contacts || []);
+    } catch (error) {
+      setMessage(`error::Erro ao carregar contatos: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await emergencyContactsService.searchUsers(searchTerm);
+      setSearchResults(response.users || []);
+    } catch (error) {
+      setMessage(`error::Erro na busca: ${error.message}`);
+      setSearchResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddAppUser = async (user) => {
+    try {
+      const contactData = {
+        contactType: 'app_user',
+        appUserId: user.id
+      };
+
+      await emergencyContactsService.addContact(contactData);
+      setMessage('success::Contato adicionado com sucesso!');
+      setSearchTerm('');
+      setSearchResults([]);
+      loadContacts();
+      setActiveTab('existing');
+    } catch (error) {
+      setMessage(`error::Erro ao adicionar contato: ${error.message}`);
+    }
+  };
+
+  const handleAddExternalContact = async (e) => {
+    e.preventDefault();
+    
+    if (!newExternalContact.name || !newExternalContact.phone) {
+      setMessage('error::Nome e telefone são obrigatórios');
+      return;
+    }
+
+    try {
+      const contactData = {
+        contactType: 'external',
+        externalContact: {
+          name: newExternalContact.name,
+          phone: newExternalContact.phone,
+          email: newExternalContact.email || '',
+          relationship: newExternalContact.relationship || ''
+        }
+      };
+
+      await emergencyContactsService.addContact(contactData);
+      setMessage('success::Contato externo adicionado com sucesso!');
+      setNewExternalContact({ name: '', phone: '', email: '', relationship: '' });
+      loadContacts();
+      setActiveTab('existing');
+    } catch (error) {
+      setMessage(`error::Erro ao adicionar contato: ${error.message}`);
+    }
+  };
+
+  const handleUpdateNotifications = async (contactId, notifications) => {
+    try {
+      await emergencyContactsService.updateContact(contactId, { notifications });
+      setMessage('success::Configurações atualizadas com sucesso!');
+      loadContacts();
+    } catch (error) {
+      setMessage(`error::Erro ao atualizar configurações: ${error.message}`);
+    }
+  };
+
+  const handleDeleteContact = async (contactId) => {
+    if (!window.confirm('Tem certeza que deseja excluir este contato?')) {
+      return;
+    }
+
+    try {
+      await emergencyContactsService.deleteContact(contactId);
+      setMessage('success::Contato excluído com sucesso!');
+      loadContacts();
+    } catch (error) {
+      setMessage(`error::Erro ao excluir contato: ${error.message}`);
+    }
+  };
+
+  const renderContactsList = () => (
+    <div className="contacts-section">
+      <h3>Seus Contatos de Emergência</h3>
+      
+      {loading ? (
+        <div className="loading-contacts">Carregando contatos...</div>
+      ) : contacts.length === 0 ? (
+        <div className="empty-contacts">
+          <div className="empty-icon">👤</div>
+          <p>Nenhum contato de emergência cadastrado.</p>
+          <p>Adicione contatos para serem notificados em caso de emergência.</p>
+        </div>
+      ) : (
+        <div className="contacts-grid">
+          {contacts.map(contact => (
+            <div key={contact.id} className={`contact-card ${contact.isInvalid ? 'invalid' : ''}`}>
+              <div className="contact-header">
+                <div className="contact-avatar">
+                  {contact.isAppUser ? '👤' : '📱'}
+                </div>
+                <div className="contact-info">
+                  <h4>{contact.name}</h4>
+                  <p className="contact-phone">{contact.phoneNumber}</p>
+                  {contact.email && contact.email !== 'N/A' && (
+                    <p className="contact-email">{contact.email}</p>
+                  )}
+                  {contact.relationship && (
+                    <p className="contact-relationship">{contact.relationship}</p>
+                  )}
+                </div>
+                {contact.isInvalid && (
+                  <span className="invalid-badge">Inválido</span>
+                )}
+              </div>
+              
+              <div className="contact-notifications">
+                <h5>Notificações:</h5>
+                <div className="notification-options">
+                  <label className="notification-toggle">
+                    <input
+                      type="checkbox"
+                      checked={contact.notifications?.emergencyAlerts}
+                      onChange={(e) => handleUpdateNotifications(contact.id, {
+                        ...contact.notifications,
+                        emergencyAlerts: e.target.checked
+                      })}
+                      disabled={contact.isInvalid}
+                    />
+                    <span>Alertas de Emergência</span>
+                  </label>
+                  <label className="notification-toggle">
+                    <input
+                      type="checkbox"
+                      checked={contact.notifications?.routeAlerts}
+                      onChange={(e) => handleUpdateNotifications(contact.id, {
+                        ...contact.notifications,
+                        routeAlerts: e.target.checked
+                      })}
+                      disabled={contact.isInvalid}
+                    />
+                    <span>Alertas de Rota</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div className="contact-actions">
+                <button
+                  className="danger-button small"
+                  onClick={() => handleDeleteContact(contact.id)}
+                  disabled={contact.isInvalid}
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderAddContact = () => (
+    <div className="add-contact-section">
+      <h3>Adicionar Novo Contato</h3>
+      
+      <div className="add-contact-tabs">
+        <div className="contact-type-option">
+          <h4>Buscar Usuários do App</h4>
+          <div className="search-container">
+            <div className="search-input-group">
+              <input
+                type="text"
+                placeholder="Digite nome ou email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="search-input"
+              />
+              <button 
+                onClick={handleSearch} 
+                disabled={loading}
+                className="search-contats-button"
+              >
+                {loading ? 'Buscando...' : 'Buscar'}
+              </button>
+            </div>
+            
+            {searchResults.length > 0 && (
+              <div className="search-results">
+                <h5>Resultados encontrados:</h5>
+                {searchResults.map(user => (
+                  <div key={user.id} className="search-result">
+                    <div className="user-details">
+                      <strong>{user.name}</strong>
+                      <span>{user.email}</span>
+                      <span>{user.phone}</span>
+                    </div>
+                    <button
+                      className="primary-button small"
+                      onClick={() => handleAddAppUser(user)}
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="contact-type-option">
+          <h4>Adicionar Contato Externo</h4>
+          <form onSubmit={handleAddExternalContact} className="external-contact-form">
+            <div className="form-group">
+              <label>Nome *</label>
+              <input
+                type="text"
+                value={newExternalContact.name}
+                onChange={(e) => setNewExternalContact(prev => ({
+                  ...prev,
+                  name: e.target.value
+                }))}
+                required
+                placeholder="Nome completo"
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Telefone *</label>
+              <input
+                type="tel"
+                value={newExternalContact.phone}
+                onChange={(e) => setNewExternalContact(prev => ({
+                  ...prev,
+                  phone: e.target.value
+                }))}
+                required
+                placeholder="(11) 99999-9999"
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Email</label>
+              <input
+                type="email"
+                value={newExternalContact.email}
+                onChange={(e) => setNewExternalContact(prev => ({
+                  ...prev,
+                  email: e.target.value
+                }))}
+                placeholder="email@exemplo.com"
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Relação</label>
+              <input
+                type="text"
+                value={newExternalContact.relationship}
+                onChange={(e) => setNewExternalContact(prev => ({
+                  ...prev,
+                  relationship: e.target.value
+                }))}
+                placeholder="Ex: Mãe, Amiga, Irmã"
+              />
+            </div>
+            
+            <button type="submit" className="primary-button full-width">
+              Adicionar Contato Externo
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (!showModal) {
+    return (
+      <button 
+        className="secondary-button"
+        onClick={() => setShowModal(true)}
+      >
+        👤 Gerenciar Contatos
+      </button>
+    );
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal emergency-contacts-modal">
+        <button className="modal-close" onClick={() => setShowModal(false)}>
+          ✕
+        </button>
+        
+        <h2>Contatos de Emergência</h2>
+        <p className="modal-subtitle">
+          Gerencie as pessoas que serão notificadas em caso de emergência.
+        </p>
+
+        {message && (
+          <div className={`auth-message ${message.split('::')[0]}`}>
+            {message.split('::')[1]}
+          </div>
+        )}
+
+        <div className="contacts-modal-tabs">
+          <button 
+            className={`contacts-tab ${activeTab === 'existing' ? 'active' : ''}`}
+            onClick={() => setActiveTab('existing')}
+          >
+            Meus Contatos
+          </button>
+          <button 
+            className={`contacts-tab ${activeTab === 'add' ? 'active' : ''}`}
+            onClick={() => setActiveTab('add')}
+          >
+            Adicionar Contato
+          </button>
+        </div>
+
+        <div className="contacts-modal-content">
+          {activeTab === 'existing' ? renderContactsList() : renderAddContact()}
+        </div>
+
+        <div className="modal-actions">
+          <button className="secondary-button" onClick={() => setShowModal(false)}>
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -411,12 +852,32 @@ const PanicButtonExpanded = () => {
   const [showModal, setShowModal] = useState(false);
   const [alertSent, setAlertSent] = useState(false);
   const [locationSharing, setLocationSharing] = useState(false);
+  const [emergencyContacts, setEmergencyContacts] = useState([]);
   const [options, setOptions] = useState({
     location: true,
     call: true,
     sms: true,
     audio: false
   });
+
+  useEffect(() => {
+    if (showModal && !alertSent) {
+      loadEmergencyContacts();
+    }
+  }, [showModal, alertSent]);
+
+  const loadEmergencyContacts = async () => {
+    try {
+      const response = await emergencyContactsService.getContacts();
+      const validContacts = (response.contacts || []).filter(contact => 
+        !contact.isInvalid && contact.notifications?.emergencyAlerts
+      );
+      setEmergencyContacts(validContacts);
+    } catch (error) {
+      console.error('Erro ao carregar contatos:', error);
+      setEmergencyContacts([]);
+    }
+  };
 
   const handleSendAlert = () => {
     setAlertSent(true);
@@ -459,7 +920,7 @@ const PanicButtonExpanded = () => {
                   
                   <div className="contacts-section">
                     <h5>Contatos de Confiança</h5>
-                    <p>3 contatos configurados</p>
+                    <p>{emergencyContacts.length} contatos configurados</p>
                   </div>
                   
                   <button className="secondary-button" onClick={handleStartSharing}>
@@ -527,15 +988,41 @@ const PanicButtonExpanded = () => {
             
             <div className="contacts-list">
               <h4>Contatos que serão notificados:</h4>
-              <ul>
-                <li>Contato 1: (11) 98765-4321</li>
-                <li>Contato 2: (11) 91234-5678</li>
-                <li>Contato 3: (11) 99876-5432</li>
-              </ul>
+              {emergencyContacts.length > 0 ? (
+                <ul>
+                  {emergencyContacts.map(contact => (
+                    <li key={contact.id}>
+                      <strong>{contact.name}</strong> - {contact.phoneNumber}
+                      {contact.relationship && ` (${contact.relationship})`}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="no-contacts-warning">
+                  <p>⚠️ Nenhum contato configurado para alertas de emergência.</p>
+                  <p>
+                    <button 
+                      type="button" 
+                      className="text-button"
+                      onClick={() => {
+                        setShowModal(false);
+                      }}
+                    >
+                      Configure os contatos primeiro
+                    </button>
+                  </p>
+                </div>
+              )}
             </div>
             
-            <button className="emergency-button" onClick={handleSendAlert}>
-              🚨 ATIVAR AJUDA RÁPIDA
+            <button 
+              className="emergency-button" 
+              onClick={handleSendAlert}
+              disabled={emergencyContacts.length === 0}
+            >
+              {emergencyContacts.length === 0 
+                ? '⚠️ CONFIGURE CONTATOS PRIMEIRO' 
+                : '🚨 ATIVAR AJUDA RÁPIDA'}
             </button>
           </div>
         </div>
@@ -838,7 +1325,6 @@ export default function App() {
   const [authMode, setAuthMode] = useState('login');
   const [authMessage, setAuthMessage] = useState('');
 
-  // Estados para formulários de autenticação
   const [loginData, setLoginData] = useState({
     email: '',
     password_hash: ''
@@ -854,7 +1340,6 @@ export default function App() {
     neighborhood: ''
   });
 
-  // Verificar autenticação ao carregar
   useEffect(() => {
     checkAuthentication();
   }, []);
@@ -873,7 +1358,6 @@ export default function App() {
     }
   };
 
-  // Funções de autenticação
   const handleLogin = async (e) => {
     e.preventDefault();
     setAuthMessage('');
@@ -904,7 +1388,6 @@ export default function App() {
         } : undefined
       };
 
-      // Remove campos undefined
       Object.keys(userData).forEach(key => {
         if (userData[key] === '' || userData[key] === undefined) {
           delete userData[key];
@@ -925,7 +1408,6 @@ export default function App() {
     }
   };
 
-  // Modificar a função handleLogout existente
   const handleLogout = async (type) => {
     setShowLogoutModal(null);
     
@@ -955,7 +1437,6 @@ export default function App() {
     }
   };
 
-  // Atualizar perfil
   const handleUpdateProfile = async (userData) => {
     try {
       const response = await apiService.updateProfile(userData);
@@ -978,7 +1459,6 @@ export default function App() {
     { id: 'auth', label: isAuthenticated ? 'Sair' : 'Entrar', icon: LogoutIcon, requiresAuth: false },
   ];
 
-  // Modificar a função de clique no menu
   const handleMenuClick = (item) => {
     if (item.id === 'auth') {
       if (isAuthenticated) {
@@ -997,7 +1477,6 @@ export default function App() {
     }
   };
 
-  // Adicionar mensagem de autenticação no header se existir
   useEffect(() => {
     if (authMessage) {
       const timer = setTimeout(() => {
@@ -1442,9 +1921,7 @@ export default function App() {
                       <span>190</span>
                     </div>
                   </div>
-                  <button className="secondary-button">
-                    Gerenciar Contatos
-                  </button>
+                  <EmergencyContactsManager />
                 </div>
               </div>
             </div>
@@ -2443,11 +2920,9 @@ export default function App() {
                       <div className="setting-icon">👥</div>
                       <div className="setting-info">
                         <h4>Contatos de Emergência</h4>
-                        <p>3 contatos configurados</p>
+                        <p>Gerencie quem será notificado em emergências</p>
                       </div>
-                      <button className="text-button">
-                        Gerenciar
-                      </button>
+                      <EmergencyContactsManager />
                     </div>
 
                     <div className="setting-card">
@@ -2784,7 +3259,6 @@ export default function App() {
           ))}
         </div>
         
-        {/* Status de autenticação na sidebar */}
         <div className="auth-status">
           {isAuthenticated ? (
             <div className="user-info-sidebar">
@@ -2844,7 +3318,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* Mensagem de autenticação */}
         {authMessage && (
           <div className={`auth-message ${authMessage.split('::')[0]}`}>
             {authMessage.split('::')[1]}
@@ -2856,7 +3329,6 @@ export default function App() {
         </div>
       </main>
 
-      {/* Modal de Autenticação */}
       {showAuthModal && (
         <div className="modal-overlay">
           <div className="modal auth-modal">
@@ -3027,7 +3499,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal de Logout (existente) */}
       {showLogoutModal && (
         <LogoutModal 
           type={showLogoutModal}
