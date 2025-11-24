@@ -1,20 +1,25 @@
 import os
 import librosa
 import numpy as np
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, save_model
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.models import save_model
+from tensorflow.keras.callbacks import EarlyStopping
 import warnings
 
 warnings.filterwarnings("ignore")
 
-# Pasta de dados
+# --- Config ---
+
 DATA_DIR = "augmented_audios_v2"
 CATEGORIES = ["normal", "risk"]
-SUBFOLDERS = ["", "bibia"]  # Pasta principal + bibia
+SUBFOLDERS = ["", "bibia"] # Pasta principal + bibia
+EPOCHS = 250
+BATCH_SIZE = 16
+MODEL_SAVE_PATH = "risk_audio_model_v2.keras"
 
-# Função para carregar e extrair features de todos os áudios
+# --- Função para carregar e extrair features ---
+
 def load_data(base_dir):
     X = []
     y = []
@@ -38,27 +43,45 @@ def load_data(base_dir):
                         print(f"⚠️ Erro ao processar {file_path}: {e}")
     if len(X) == 0:
         raise ValueError("Nenhum arquivo de áudio válido encontrado. Checa as pastas e arquivos .wav!")
-    return np.array(X), np.array(y)
 
-# Carrega dados
+    # Normaliza os MFCCs
+    X = np.array(X)
+    X = (X - np.mean(X, axis=0)) / (np.std(X, axis=0) + 1e-10)
+    y = np.array(y)
+
+    # Shuffle
+    indices = np.arange(len(X))
+    np.random.shuffle(indices)
+    return X[indices], y[indices]
+
+# --- Carrega dados ---
+
 X, y = load_data(DATA_DIR)
+print(f"✅ Dados carregados: {len(X)} áudios encontrados.")
 
-# Cria modelo simples
-model = Sequential()
-model.add(Dense(128, input_shape=(40,), activation="relu"))
-model.add(Dropout(0.3))
-model.add(Dense(64, activation="relu"))
-model.add(Dropout(0.3))
-model.add(Dense(1, activation="sigmoid"))
+# --- Cria modelo ---
 
-# Compila
+model = Sequential([
+    Dense(128, input_shape=(40,), activation="relu"),
+    Dropout(0.3),
+    Dense(64, activation="relu"),
+    Dropout(0.3),
+    Dense(1, activation="sigmoid")
+])
+
 model.compile(optimizer=Adam(learning_rate=0.0005), loss="binary_crossentropy", metrics=["accuracy"])
+print("🛠 Modelo compilado.")
 
-# Treina
-print("🏋️‍♂️ Iniciando treinamento...")
-history = model.fit(X, y, epochs=250, batch_size=16, validation_split=0.2)
+# --- Callbacks ---
 
-# Salva modelo
-MODEL_SAVE_PATH = "risk_audio_model_v2.keras"
+early_stop = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
+
+# --- Treina modelo ---
+
+print(f"Iniciando treinamento por {EPOCHS} epochs...")
+history = model.fit(X, y, epochs=EPOCHS, batch_size=BATCH_SIZE, validation_split=0.2, callbacks=[early_stop], verbose=2)
+
+# --- Salva modelo ---
+
 save_model(model, MODEL_SAVE_PATH)
 print(f"✅ Treinamento concluído e modelo salvo em {MODEL_SAVE_PATH}!")

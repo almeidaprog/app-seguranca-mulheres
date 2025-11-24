@@ -38,7 +38,7 @@ if not os.path.exists(MODEL_PATH):
 try:
     print("Carregando modelo de audio...", file=sys.stderr)
     model = load_model(MODEL_PATH)
-    print("✅ Modelo carregado com sucesso!", file=sys.stderr)
+    print("Modelo carregado com sucesso!", file=sys.stderr)
 except Exception as e:
     error_msg = f"Erro ao carregar modelo: {e}"
     print(error_msg, file=sys.stderr)
@@ -120,9 +120,9 @@ while True:
             text = "Nao foi possivel transcrever o audio"
 
         risk_level = None
-        if prob > 0.95:
+        if prob > 0.9:
             risk_level = "critical"
-        elif prob > 0.8:
+        elif prob > 0.7:
             risk_level = "high"
 
 
