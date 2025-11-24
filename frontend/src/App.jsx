@@ -130,6 +130,57 @@ const emergencyContactsService = {
   }
 };
 
+// Serviço API para AI Risk Detection
+const AI_RISK_API_BASE_URL = 'http://localhost:5000/api/ai';
+
+const aiRiskService = {
+  async request(endpoint, options = {}) {
+    const url = `${AI_RISK_API_BASE_URL}${endpoint}`;
+    
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      ...options,
+    };
+
+    if (options.body) {
+      config.body = JSON.stringify(options.body);
+    }
+
+    try {
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Erro na requisição de AI Risk Detection');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Erro na requisição de AI Risk:', error);
+      throw error;
+    }
+  },
+
+  async startListening() {
+    return this.request('/listen/start', { method: 'POST' });
+  },
+
+  async stopListening() {
+    return this.request('/listen/stop', { method: 'POST' });
+  },
+
+  async getListeningStatus() {
+    return this.request('/listen/status');
+  },
+
+  async getRisks() {
+    return this.request('/risks');
+  }
+};
+
 // ÍCONES CORRETOS DO FIGMA
 const HomeIcon = () => (
   <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -170,6 +221,14 @@ const ReportIcon = () => (
 const MapIcon = () => (
   <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M9 4v16m6-16v16M3 4l7 4 4-4 7 4V4l-7-4-4 4L3 4z" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const AIRiskIcon = () => (
+  <svg className="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M12 8v4l2 2" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M12 16h.01" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
@@ -284,6 +343,294 @@ const UnitSelector = () => {
             {unitOption.label}
           </button>
         ))}
+      </div>
+    </div>
+  );
+};
+
+// COMPONENTE PARA AI RISK DETECTION
+const AIRiskDetection = () => {
+  const [isListening, setIsListening] = useState(false);
+  const [risks, setRisks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showModal, setShowModal] = useState(false);
+
+  // Verificar status da escuta ao carregar o componente
+  useEffect(() => {
+    if (showModal) {
+      checkListeningStatus();
+      fetchRisks();
+    }
+  }, [showModal]);
+
+  // Verificar status da escuta periodicamente quando estiver ativa
+  useEffect(() => {
+    let interval;
+    if (isListening && showModal) {
+      interval = setInterval(() => {
+        checkListeningStatus();
+        fetchRisks();
+      }, 5000); // Verifica a cada 5 segundos
+    }
+    return () => clearInterval(interval);
+  }, [isListening, showModal]);
+
+  const checkListeningStatus = async () => {
+    try {
+      const response = await aiRiskService.getListeningStatus();
+      setIsListening(response.isListening);
+    } catch (err) {
+      console.error('Erro ao verificar status:', err);
+      if (err.message.includes('401')) {
+        setError('Usuário não autenticado. Faça login novamente.');
+      }
+    }
+  };
+
+  const startListening = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      await aiRiskService.startListening();
+      setIsListening(true);
+      setError('');
+      // Buscar riscos imediatamente após iniciar
+      setTimeout(() => fetchRisks(), 1000);
+    } catch (err) {
+      console.error('Erro ao iniciar escuta:', err);
+      if (err.message.includes('400')) {
+        setError('Escuta já está ativa');
+      } else if (err.message.includes('401')) {
+        setError('Usuário não autenticado');
+      } else {
+        setError('Erro ao iniciar monitoramento de áudio');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stopListening = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      await aiRiskService.stopListening();
+      setIsListening(false);
+      setError('');
+    } catch (err) {
+      console.error('Erro ao parar escuta:', err);
+      if (err.message.includes('400')) {
+        setError('Nenhuma sessão de escuta ativa');
+      } else if (err.message.includes('401')) {
+        setError('Usuário não autenticado');
+      } else {
+        setError('Erro ao parar monitoramento de áudio');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRisks = async () => {
+    try {
+      const response = await aiRiskService.getRisks();
+      setRisks(response.risks || []);
+    } catch (err) {
+      console.error('Erro ao buscar riscos:', err);
+      if (err.message.includes('401')) {
+        setError('Usuário não autenticado. Faça login novamente.');
+      }
+    }
+  };
+
+  const formatTimestamp = (timestamp) => {
+    return new Date(timestamp).toLocaleString('pt-BR');
+  };
+
+  const getRiskLevelColor = (riskLevel) => {
+    switch (riskLevel) {
+      case 'critical':
+        return 'risk-critical';
+      case 'high':
+        return 'risk-high';
+      case 'medium':
+        return 'risk-medium';
+      case 'low':
+        return 'risk-low';
+      default:
+        return 'risk-default';
+    }
+  };
+
+  const getRiskLevelText = (riskLevel) => {
+    const levels = {
+      'critical': 'Crítico',
+      'high': 'Alto',
+      'medium': 'Médio',
+      'low': 'Baixo'
+    };
+    return levels[riskLevel] || riskLevel;
+  };
+
+  const getRiskLevelIcon = (riskLevel) => {
+    const icons = {
+      'critical': '🔴',
+      'high': '🟠',
+      'medium': '🟡',
+      'low': '🟢'
+    };
+    return icons[riskLevel] || '⚪';
+  };
+
+  if (!showModal) {
+    return (
+      <div className="feature-card" onClick={() => setShowModal(true)}>
+        <div className="feature-icon">🎤</div>
+        <h3>Detecção por IA</h3>
+        <p>Monitoramento inteligente de áudio para detecção de situações de risco</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal ai-risk-modal">
+        <button className="modal-close" onClick={() => setShowModal(false)}>
+          ✕
+        </button>
+        
+        <h2>Detecção de Riscos por IA</h2>
+        <p className="modal-subtitle">
+          Sistema inteligente de monitoramento de áudio para identificar situações de risco em tempo real.
+        </p>
+
+        {error && (
+          <div className={`auth-message ${error.includes('não autenticado') ? 'error' : 'warning'}`}>
+            {error}
+          </div>
+        )}
+
+        {/* Controles de escuta */}
+        <div className="ai-control-section">
+          <h3>Controle de Monitoramento</h3>
+          <div className="status-indicator">
+            <div className={`status-dot ${isListening ? 'listening' : 'stopped'}`}></div>
+            <span>{isListening ? 'Monitoramento Ativo' : 'Monitoramento Parado'}</span>
+          </div>
+          
+          <div className="control-buttons">
+            <button
+              onClick={startListening}
+              disabled={isListening || loading}
+              className={`btn btn-start ${isListening ? 'disabled' : ''}`}
+            >
+              {loading ? 'Iniciando...' : '🎤 Iniciar Monitoramento'}
+            </button>
+            <button
+              onClick={stopListening}
+              disabled={!isListening || loading}
+              className={`btn btn-stop ${!isListening ? 'disabled' : ''}`}
+            >
+              {loading ? 'Parando...' : '⏹️ Parar Monitoramento'}
+            </button>
+            <button
+              onClick={fetchRisks}
+              className="btn btn-refresh"
+            >
+              🔄 Atualizar Riscos
+            </button>
+          </div>
+
+          <div className="ai-info">
+            <h4>Como funciona:</h4>
+            <ul>
+              <li>• O sistema monitora o áudio do ambiente em tempo real</li>
+              <li>• Identifica automaticamente palavras-chave de risco</li>
+              <li>• Classifica o nível de risco (baixo, médio, alto, crítico)</li>
+              <li>• Registra todas as detecções com timestamp</li>
+              <li>• Funciona de forma discreta e eficiente</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Lista de riscos detectados */}
+        <div className="risks-section">
+          <h3>Riscos Detectados Recentemente</h3>
+          
+          {risks.length === 0 ? (
+            <div className="no-risks">
+              <div className="empty-icon">🎯</div>
+              <p>Nenhum risco detectado recentemente.</p>
+              <p>Inicie o monitoramento para começar a detectar situações de risco.</p>
+            </div>
+          ) : (
+            <div className="risks-list">
+              {risks.map((risk, index) => (
+                <div key={index} className={`risk-card ${getRiskLevelColor(risk.riskLevel)}`}>
+                  <div className="risk-header">
+                    <div className="risk-level-info">
+                      <span className="risk-icon">{getRiskLevelIcon(risk.riskLevel)}</span>
+                      <span className="risk-level">{getRiskLevelText(risk.riskLevel)}</span>
+                    </div>
+                    <span className="risk-time">
+                      {formatTimestamp(risk.timestamp)}
+                    </span>
+                  </div>
+                  <div className="risk-words">
+                    "{risk.spokenWords}"
+                  </div>
+                  <div className="risk-meta">
+                    <span className="risk-confidence">Detectado automaticamente</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Estatísticas */}
+        <div className="risk-stats">
+          <h3>Estatísticas de Detecção</h3>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-icon">🔴</div>
+              <div className="stat-info">
+                <h3>{risks.filter(r => r.riskLevel === 'critical').length}</h3>
+                <p>Críticos</p>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon">🟠</div>
+              <div className="stat-info">
+                <h3>{risks.filter(r => r.riskLevel === 'high').length}</h3>
+                <p>Altos</p>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon">🟡</div>
+              <div className="stat-info">
+                <h3>{risks.filter(r => r.riskLevel === 'medium').length}</h3>
+                <p>Médios</p>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon">🟢</div>
+              <div className="stat-info">
+                <h3>{risks.filter(r => r.riskLevel === 'low').length}</h3>
+                <p>Baixos</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button className="secondary-button" onClick={() => setShowModal(false)}>
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1454,6 +1801,7 @@ export default function App() {
     { id: 'community', label: 'Comunidade de Ajuda', icon: CommunityIcon, requiresAuth: false },
     { id: 'reports', label: 'Denúncias', icon: ReportIcon, requiresAuth: false },
     { id: 'riskmap', label: 'Mapa de Risco', icon: MapIcon, requiresAuth: false },
+    { id: 'airisk', label: 'Detecção por IA', icon: AIRiskIcon, requiresAuth: true },
     { id: 'notifications', label: 'Notificações', icon: NotificationIcon, requiresAuth: false },
     { id: 'settings', label: 'Configurações', icon: SettingsIcon, requiresAuth: true },
     { id: 'auth', label: isAuthenticated ? 'Sair' : 'Entrar', icon: LogoutIcon, requiresAuth: false },
@@ -1520,6 +1868,7 @@ export default function App() {
             <div className="features-grid">
               <AnonymousReport />
               <SafeRoutes />
+              <AIRiskDetection />
             </div>
           </>
         );
@@ -2508,6 +2857,99 @@ export default function App() {
               </div>
             </div>
           </>
+        );
+      
+      case 'airisk':
+        return (
+          <AuthRequired isAuthenticated={isAuthenticated} onShowAuth={() => {
+            setAuthMode('login');
+            setShowAuthModal(true);
+          }}>
+            <>
+              <h1 className="page-title">Detecção de Riscos por IA</h1>
+              <p className="page-subtitle">
+                Sistema inteligente de monitoramento de áudio para identificar situações de risco em tempo real.
+              </p>
+              
+              <div className="ai-risk-page-content">
+                <div className="ai-features-grid">
+                  <div className="feature-card-large">
+                    <div className="feature-icon-large">🎤</div>
+                    <h3>Monitoramento em Tempo Real</h3>
+                    <p>Análise contínua do áudio ambiente para detectar automaticamente situações de perigo.</p>
+                    <ul>
+                      <li>✓ Detecção de palavras-chave de risco</li>
+                      <li>✓ Classificação automática de urgência</li>
+                      <li>✓ Funcionamento discreto</li>
+                      <li>✓ Baixo consumo de bateria</li>
+                    </ul>
+                  </div>
+
+                  <div className="feature-card-large">
+                    <div className="feature-icon-large">📊</div>
+                    <h3>Análise Inteligente</h3>
+                    <p>Algoritmos de IA avançados para identificar padrões e comportamentos de risco.</p>
+                    <ul>
+                      <li>✓ Reconhecimento de tom de voz</li>
+                      <li>✓ Análise de contexto</li>
+                      <li>✓ Aprendizado contínuo</li>
+                      <li>✓ Baixa taxa de falsos positivos</li>
+                    </ul>
+                  </div>
+
+                  <div className="feature-card-large">
+                    <div className="feature-icon-large">🚨</div>
+                    <h3>Alertas Automáticos</h3>
+                    <p>Notificações instantâneas quando situações de risco são identificadas.</p>
+                    <ul>
+                      <li>✓ Notificação para contatos de emergência</li>
+                      <li>✓ Registro detalhado de eventos</li>
+                      <li>✓ Integração com botão do pânico</li>
+                      <li>✓ Histórico completo de detecções</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="ai-risk-main">
+                  <AIRiskDetection />
+                </div>
+
+                <div className="privacy-notice">
+                  <h3>🔒 Privacidade e Segurança</h3>
+                  <div className="privacy-features">
+                    <div className="privacy-item">
+                      <span className="privacy-icon">🔇</span>
+                      <div className="privacy-info">
+                        <h4>Áudio Local</h4>
+                        <p>Todo o processamento de áudio é feito localmente no seu dispositivo</p>
+                      </div>
+                    </div>
+                    <div className="privacy-item">
+                      <span className="privacy-icon">📝</span>
+                      <div className="privacy-info">
+                        <h4>Somente Texto</h4>
+                        <p>Apenas palavras detectadas são enviadas para análise, nunca o áudio bruto</p>
+                      </div>
+                    </div>
+                    <div className="privacy-item">
+                      <span className="privacy-icon">⚡</span>
+                      <div className="privacy-info">
+                        <h4>Processamento Rápido</h4>
+                        <p>Análise em tempo real com latência mínima</p>
+                      </div>
+                    </div>
+                    <div className="privacy-item">
+                      <span className="privacy-icon">🛡️</span>
+                      <div className="privacy-info">
+                        <h4>Dados Protegidos</h4>
+                        <p>Todas as comunicações são criptografadas e seguras</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          </AuthRequired>
         );
       
       case 'notifications':
