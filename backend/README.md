@@ -279,6 +279,7 @@ http://localhost:5000/api/users
 ```
 **Error Responses:**
 
+<<<<<<< HEAD
 - **500 Internal Server Error:** Server error
 
 # API Documentation - Emergency Contacts

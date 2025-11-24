@@ -19,6 +19,7 @@ export const startListening = async (req, res, next) => {
         message: 'Listening is already active'
       });
     }
+
     const venvPython = path.join(__dirname, '../python/venv/Scripts/python.exe');
     const pythonScript = path.join(__dirname, '../python/teste_risk_audio_v2.py');
 
