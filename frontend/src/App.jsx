@@ -970,10 +970,10 @@ export default function App() {
     { id: 'home', label: 'Página Inicial', icon: HomeIcon, requiresAuth: false },
     { id: 'location', label: 'Minha Localização', icon: LocationIcon, requiresAuth: false },
     { id: 'panic', label: 'Botão do Pânico', icon: PanicIcon, requiresAuth: false },
-    { id: 'community', label: 'Comunidade de Ajuda', icon: CommunityIcon, requiresAuth: true },
-    { id: 'reports', label: 'Denúncias', icon: ReportIcon, requiresAuth: true },
+    { id: 'community', label: 'Comunidade de Ajuda', icon: CommunityIcon, requiresAuth: false },
+    { id: 'reports', label: 'Denúncias', icon: ReportIcon, requiresAuth: false },
     { id: 'riskmap', label: 'Mapa de Risco', icon: MapIcon, requiresAuth: false },
-    { id: 'notifications', label: 'Notificações', icon: NotificationIcon, requiresAuth: true },
+    { id: 'notifications', label: 'Notificações', icon: NotificationIcon, requiresAuth: false },
     { id: 'settings', label: 'Configurações', icon: SettingsIcon, requiresAuth: true },
     { id: 'auth', label: isAuthenticated ? 'Sair' : 'Entrar', icon: LogoutIcon, requiresAuth: false },
   ];
@@ -1453,13 +1453,6 @@ export default function App() {
       
       case 'community':
         return (
-          <AuthRequired 
-            isAuthenticated={isAuthenticated}
-            onShowAuth={() => {
-              setAuthMode('login');
-              setShowAuthModal(true);
-            }}
-          >
             <>
               <h1 className="page-title">Comunidade de Ajuda</h1>
               <p className="page-subtitle">Conecte-se com outras mulheres para apoio mútuo e segurança em um espaço seguro.</p>
@@ -1559,18 +1552,10 @@ export default function App() {
                 </div>
               </div>
             </>
-          </AuthRequired>
         );
       
       case 'reports':
         return (
-          <AuthRequired 
-            isAuthenticated={isAuthenticated}
-            onShowAuth={() => {
-              setAuthMode('login');
-              setShowAuthModal(true);
-            }}
-          >
             <>
               <h1 className="page-title">Denúncias</h1>
               <p className="page-subtitle">Faça denúncias de forma anônima e segura. Sua identidade está protegida.</p>
@@ -1746,7 +1731,6 @@ export default function App() {
                 </div>
               </div>
             </>
-          </AuthRequired>
         );
       
       case 'riskmap':
@@ -2051,13 +2035,6 @@ export default function App() {
       
       case 'notifications':
         return (
-          <AuthRequired 
-            isAuthenticated={isAuthenticated}
-            onShowAuth={() => {
-              setAuthMode('login');
-              setShowAuthModal(true);
-            }}
-          >
             <>
               <h1 className="page-title">Notificações</h1>
               <p className="page-subtitle">Mantenha-se informada sobre alertas de segurança e atualizações importantes.</p>
@@ -2340,18 +2317,10 @@ export default function App() {
                 </div>
               </div>
             </>
-          </AuthRequired>
         );
       
       case 'settings':
         return (
-          <AuthRequired 
-            isAuthenticated={isAuthenticated}
-            onShowAuth={() => {
-              setAuthMode('login');
-              setShowAuthModal(true);
-            }}
-          >
             <>
               <h1 className="page-title">Configurações</h1>
               <p className="page-subtitle">Gerencie suas preferências, privacidade e configurações da conta.</p>
@@ -2663,7 +2632,6 @@ export default function App() {
                 </div>
               </div>
             </>
-          </AuthRequired>
         );
       
       case 'auth':
